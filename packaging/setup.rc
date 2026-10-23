@@ -1,0 +1,32 @@
+#include <windows.h>
+1 ICON "../assets/mpvlight.ico"
+1 RT_MANIFEST "setup.manifest"
+// Payload installed by the setup (paths relative to packaging\, where build.cmd runs rc).
+101 RCDATA "../portable/MpvLight.exe"
+102 RCDATA "../README.md"
+103 RCDATA "../CHANGELOG.md"
+104 RCDATA "../LICENSE-GPL.txt"
+1 VERSIONINFO
+FILEVERSION 0,5,1,0
+PRODUCTVERSION 0,5,1,0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+ BLOCK "StringFileInfo"
+ BEGIN
+  BLOCK "041004b0"
+  BEGIN
+   VALUE "FileDescription", "Installazione di MpvLight"
+   VALUE "CompanyName", "MpvLight"
+   VALUE "LegalCopyright", "GPL-2.0-or-later"
+   VALUE "OriginalFilename", "MpvLight-Setup-0.5.1-x64.exe"
+   VALUE "FileVersion", "0.5.1"
+   VALUE "ProductName", "MpvLight"
+   VALUE "ProductVersion", "0.5.1"
+  END
+ END
+ BLOCK "VarFileInfo"
+ BEGIN
+  VALUE "Translation", 0x0410, 1200
+ END
+END

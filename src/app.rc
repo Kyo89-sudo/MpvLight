@@ -1,0 +1,39 @@
+#include <windows.h>
+1 ICON "../assets/mpvlight.ico"
+1 RT_MANIFEST "app.manifest"
+1 VERSIONINFO
+FILEVERSION 0,5,1,0
+PRODUCTVERSION 0,5,1,0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+ BLOCK "StringFileInfo"
+ BEGIN
+  BLOCK "041004b0"
+  BEGIN
+   VALUE "FileDescription", "MpvLight — lettore multimediale"
+   VALUE "CompanyName", "MpvLight"
+   VALUE "LegalCopyright", "GPL-2.0-or-later"
+   VALUE "OriginalFilename", "MpvLight.exe"
+   VALUE "FileVersion", "0.5.1"
+   VALUE "ProductName", "MpvLight"
+   VALUE "ProductVersion", "0.5.1"
+  END
+ END
+ BLOCK "VarFileInfo"
+ BEGIN
+  VALUE "Translation", 0x0410, 1200
+ END
+END
+
+2 DIALOGEX 0, 0, 240, 100
+STYLE DS_SETFONT | DS_SHELLFONT | DS_CENTER | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Vai al tempo"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+ LTEXT "Scrivi il tempo: 90, 1:30 oppure 1:02:30", -1, 12, 10, 216, 12
+ EDITTEXT 122, 12, 26, 216, 16, ES_AUTOHSCROLL | WS_TABSTOP
+ LTEXT "", 301, 12, 48, 216, 12
+ DEFPUSHBUTTON "Vai", IDOK, 112, 76, 54, 15
+ PUSHBUTTON "Annulla", IDCANCEL, 174, 76, 54, 15
+END

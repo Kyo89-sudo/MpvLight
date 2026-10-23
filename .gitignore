@@ -1,0 +1,28 @@
+# Build and distribution output
+/build/
+/dist/
+/portable/
+*.obj
+*.res
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# Local settings and captures
+/settings.ini
+/portable.flag
+/Screenshots/
+
+# Editor and operating system files
+/.vs/
+/.vscode/
+*.user
+*.suo
+__pycache__/
+*.py[cod]
+Thumbs.db
+Desktop.ini
+.DS_Store
