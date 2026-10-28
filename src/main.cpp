@@ -1,4 +1,4 @@
-// MpvLight 0.5.1 — interfaccia Win32 in stile mpv: il video riempie la finestra e i controlli
+// MpvLight 0.5.2 — interfaccia Win32 in stile mpv: il video riempie la finestra e i controlli
 // compaiono sopra il video in finestre "layered" semitrasparenti che si nascondono da sole.
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -50,7 +50,7 @@ using std::min;
 #pragma comment(lib, "gdiplus.lib")
 using namespace Gdiplus;
 
-static const wchar_t *kVersion = L"0.5.1";
+static const wchar_t *kVersion = L"0.5.2";
 
 // ---------------------------------------------------------------------------------------------
 // Palette
@@ -1455,7 +1455,7 @@ void chooseShotFolder() {
 
 // Help / about window: a dark custom-drawn panel with two tabs.
 int helpTab = 0, helpHover = -1;
-RectF helpTabs[2], helpClose, helpLinks[2];
+RectF helpTabs[2], helpClose, helpLinks[3];
 HICON helpIcon{};
 const wchar_t *kShortcuts[][2] = {
     {L"Spazio  /  K", L"Riproduci o metti in pausa"},
@@ -1546,6 +1546,8 @@ void paintHelp(HWND w) {
             };
             line(L"Motore", playback.version.empty() ? L"libmpv non caricata" : playback.version);
             line(L"Build", comp::installedBuild());
+            line(L"Buffer in RAM", std::to_wstring(static_cast<int>(playback.bufferedSeconds)) +
+                                      L" s disponibili · lettura anticipata fino a 20 s / 64 MiB");
             line(L"Decodifica", playback.loaded ? (playback.decoder.empty() || playback.decoder == L"no"
                                                        ? L"software (CPU)"
                                                        : L"hardware · " + playback.decoder)
@@ -1562,9 +1564,9 @@ void paintHelp(HWND w) {
                 g, L"Codice sotto licenza GPL-2.0-or-later. La DLL libmpv è una build di terzi (mpv/FFmpeg).",
                 fonts.caption.get(), RectF(fx(24), y, W - fx(48), fx(22)), argb(255, cMuted));
             y += fx(36);
-            const wchar_t *links[] = {L"Build di libmpv per Windows", L"Progetto mpv"};
+            const wchar_t *links[] = {L"MpvLight su GitHub", L"Build libmpv", L"Progetto mpv"};
             float lx = fx(24);
-            for (int i = 0; i < 2; ++i) {
+            for (int i = 0; i < 3; ++i) {
                 float lw = measure(links[i], fonts.semi.get()) + fx(28);
                 helpLinks[i] = RectF(lx, y, lw, fx(32));
                 fillRound(g, helpLinks[i], fx(8), argb(255, helpHover == 10 + i ? RGB(44, 40, 58) : cPanel2));
@@ -1594,6 +1596,7 @@ LRESULT CALLBACK helpProc(HWND w, UINT msg, WPARAM a, LPARAM b) {
                 : helpClose.Contains(x, y)                    ? 9
                 : helpTab == 1 && helpLinks[0].Contains(x, y) ? 10
                 : helpTab == 1 && helpLinks[1].Contains(x, y) ? 11
+                : helpTab == 1 && helpLinks[2].Contains(x, y) ? 12
                                                               : -1;
         if (h != helpHover) {
             helpHover = h;
@@ -1617,9 +1620,12 @@ LRESULT CALLBACK helpProc(HWND w, UINT msg, WPARAM a, LPARAM b) {
         } else if (helpHover == 9)
             PostMessageW(w, WM_CLOSE, 0, 0);
         else if (helpHover == 10)
-            ShellExecuteW(w, L"open", L"https://github.com/shinchiro/mpv-winbuild-cmake/releases", nullptr,
+            ShellExecuteW(w, L"open", L"https://github.com/Kyo89-sudo/MpvLight", nullptr,
                           nullptr, SW_SHOWNORMAL);
         else if (helpHover == 11)
+            ShellExecuteW(w, L"open", L"https://github.com/shinchiro/mpv-winbuild-cmake/releases", nullptr,
+                          nullptr, SW_SHOWNORMAL);
+        else if (helpHover == 12)
             ShellExecuteW(w, L"open", L"https://mpv.io", nullptr, nullptr, SW_SHOWNORMAL);
         return 0;
     case WM_KEYDOWN:

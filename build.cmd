@@ -1,7 +1,7 @@
 @echo off
 rem MpvLight build: decoder 7z (LZMA SDK) -> portable\MpvLight.exe -> dist\ (setup, ZIP portatile, SHA256SUMS.txt)
 setlocal EnableExtensions
-set "VERSION=0.5.1"
+set "VERSION=0.5.2"
 cd /d "%~dp0"
 
 rem --- Visual Studio: use the developer environment if already active, otherwise find it with vswhere.
@@ -86,8 +86,11 @@ if errorlevel 1 (
   echo ERRORE: creazione di %ZIP% non riuscita ^(serve tar.exe di Windows 10 1803 o successivo^)
   exit /b 1
 )
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-FileHash -Algorithm SHA256 -LiteralPath 'dist\MpvLight-Setup-%VERSION%-x64.exe','%ZIP%' | ForEach-Object { '{0}  {1}' -f $_.Hash.ToLower(), (Split-Path $_.Path -Leaf) } | Set-Content -Encoding ascii 'dist\SHA256SUMS.txt'"
-if errorlevel 1 echo ATTENZIONE: SHA256SUMS.txt non generato
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $sha=[Security.Cryptography.SHA256]::Create(); try { @('dist\MpvLight-Setup-%VERSION%-x64.exe','%ZIP%') | ForEach-Object { $file=Get-Item -LiteralPath $_; $stream=[IO.File]::OpenRead($file.FullName); try { '{0}  {1}' -f ([BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','').ToLower()),$file.Name } finally { $stream.Dispose() } } | Set-Content -Encoding ascii 'dist\SHA256SUMS.txt' } finally { $sha.Dispose() }"
+if errorlevel 1 (
+    echo ERRORE: SHA256SUMS.txt non generato
+    exit /b 1
+)
 
 echo.
 echo Fatto (MpvLight %VERSION%):

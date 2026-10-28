@@ -12,7 +12,7 @@
 
 struct PlaybackState {
     bool ready{}, loaded{}, loading{}, paused{true}, seekable{}, eof{}, muted{}, capturing{}, videoReady{};
-    double time{}, duration{}, volume{75}, speed{1}, videoW{}, videoH{};
+    double time{}, duration{}, volume{75}, speed{1}, videoW{}, videoH{}, bufferedSeconds{};
     unsigned trackRevision{};
     std::wstring title, version, decoder, error, notice, lastScreenshot, captureError;
     uint64_t errorSerial{}, noticeSerial{}, captureErrorSerial{};
@@ -133,6 +133,11 @@ class Engine {
             p.option(p.h, "cursor-autohide-fs-only", "yes");
             p.option(p.h, "osd-level", "0");
             p.option(p.h, "hwdec", "auto-safe");
+            // Local files normally have only about one second of read-ahead.
+            // Keep compressed packets in RAM so a sleeping USB HDD can spin up
+            // while playback resumes. Both the time and byte limits apply.
+            p.option(p.h, "demuxer-readahead-secs", "20");
+            p.option(p.h, "demuxer-max-bytes", "64MiB");
             p.option(p.h, "volume", "75");
             p.option(p.h, "screenshot-format", format.c_str());
             auto shotDir = utf8(shots);
@@ -302,6 +307,7 @@ class Engine {
                     state.volume = p.number("volume", 75);
                     state.muted = p.flag("mute");
                     state.speed = p.number("speed", 1);
+                    state.bufferedSeconds = p.number("demuxer-cache-duration");
                     state.decoder = state.loaded ? p.text("hwdec-current") : L"";
                     state.videoReady = state.loaded && p.number("video-out-params/w") > 0;
                     // Display size (after aspect ratio and rotation), used to fit the window to the video.

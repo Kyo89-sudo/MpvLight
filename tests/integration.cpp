@@ -4,6 +4,7 @@
 #include "../src/playback.hpp"
 #include <iostream>
 #include <stdexcept>
+#include "../src/components.hpp"
 
 void require(bool ok, const char *message) {
     if (!ok)
@@ -25,6 +26,14 @@ PlaybackState awaitState(Engine &engine, F predicate, const char *message, int t
 int wmain(int argc, wchar_t **argv) {
     try {
         require(argc == 3, "Usage: integration.exe DLL fixture.mkv");
+        comp::Release release;
+        release.assets.push_back({"mpv-dev-x86_64-v3-test.7z", "https://example.invalid/v3", "", 1});
+        require(!comp::pickEngine(release, false), "AVX2 build accepted on a baseline CPU");
+        require(comp::pickEngine(release, true), "AVX2 build unavailable on a compatible CPU");
+        release.assets.push_back({"mpv-dev-x86_64-test.7z", "https://example.invalid/base", "", 1});
+        require(comp::pickEngine(release, false)->name == "mpv-dev-x86_64-test.7z",
+                "baseline engine selection");
+        std::cout << "PASS libmpv package selection and CPU compatibility\n";
         require(parseTime(L"12:30") == 750, "minutes:seconds");
         require(parseTime(L"01:12:30") == 4350, "hours:minutes:seconds");
         require(parseTime(L"90") == 90, "seconds");
@@ -64,6 +73,24 @@ int wmain(int argc, wchar_t **argv) {
                 "exact paused seek");
         }
         std::cout << "PASS exact seeks forward and backward while paused\n";
+        awaitState(engine, [](auto &s) { return s.bufferedSeconds > 5; }, "local read-ahead buffer");
+        for (int pauseMs : {1000, 5000, 30000}) {
+            engine.property("pause", "yes");
+            auto paused = awaitState(engine, [](auto &s) { return s.paused; }, "pause for resume test");
+            std::this_thread::sleep_for(std::chrono::milliseconds(pauseMs));
+            require(std::abs(engine.snapshot().time - paused.time) < .15,
+                    "playback advanced during pause");
+            auto start = std::chrono::steady_clock::now();
+            engine.property("pause", "no");
+            awaitState(engine, [&](auto &s) { return !s.paused && s.time > paused.time + .2; },
+                       "resume did not advance playback", 3000);
+            auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(
+                               std::chrono::steady_clock::now() - start).count();
+            std::cout << "PASS resume after " << pauseMs << " ms pause: " << latency << " ms\n";
+        }
+        engine.seek(60, 1);
+        awaitState(engine, [](auto &s) { return s.paused && std::abs(s.time - 60) < .15; },
+                   "restore paused position after resume test");
         auto captureFailure = engine.snapshot().captureErrorSerial;
         engine.capture(wide(path), "png"); // A media file cannot also be a directory.
         awaitState(

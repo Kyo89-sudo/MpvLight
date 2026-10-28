@@ -1,5 +1,13 @@
 # Verifiche
 
+## 0.5.2 — pausa e ripresa
+
+Eseguiti su Windows con MSVC e la libmpv già installata: suite completa superata; ripresa dopo 1 / 5 / 30 secondi di pausa rispettivamente in 206 / 207 / 208 ms (inclusi 200 ms di avanzamento richiesti dal test). Il buffer supera 5 secondi di dati.
+
+La suite `test.cmd` verifica anche che il buffer locale contenga più di 5 secondi di dati e che, dopo pause di 1, 5 e 30 secondi, il tempo di riproduzione torni ad avanzare entro 3 secondi. Stampa la latenza di ogni ripresa, inclusi 0,2 secondi di avanzamento. Controlla inoltre che una CPU senza AVX2 non riceva un pacchetto `-v3-` quando manca quello standard.
+
+La suite usa audio e video nulli e un file locale: non simula lo standby di un HDD USB né il ripristino di GPU o periferiche audio. Per verificare la segnalazione reale, aprire un video sull'HDD USB, attendere che il buffer si riempia (Aiuto → Informazioni), mettere in pausa fino allo standby e misurare la ripresa. Ripetere anche dopo un seek: fuori dall'intervallo già in RAM resta necessario attendere il disco.
+
 ## 0.5.1 — stato
 
 Fatto:

@@ -2,6 +2,14 @@
 
 Versioni nel formato `x.y.z`: `z` per le sole correzioni, `y` per nuove funzioni. Le risorse Windows che vogliono quattro numeri (manifest e blocco numerico VERSIONINFO) usano `x.y.z.0`.
 
+## 0.5.2 — 2026-10-28
+
+- Lettura anticipata locale fino a 20 secondi, con limite di 64 MiB di pacchetti compressi in RAM, per ridurre le attese dopo una pausa su HDD USB che va in standby. Il tempo effettivamente disponibile dipende dal bitrate e dal formato; non impedisce lo standby e non elimina ogni possibile attesa del disco.
+- Informazioni: collegamento al repository GitHub di MpvLight e indicazione dei secondi nel buffer.
+- Download libmpv: impedito il ripiego su una DLL AVX2 quando la CPU non è compatibile e manca il pacchetto standard.
+- Documentato il significato di `mpv-dev`: pacchetto con la DLL e gli header, distinto dal lettore `mpv.exe`. Il download automatico continua a usare le build Git di terzi di shinchiro, non una versione stabile fissata.
+- Test di pausa di 1, 5 e 30 secondi con verifica dell'avanzamento effettivo dopo la ripresa e della lettura anticipata.
+
 ## 0.5.1 — 2026-10-23
 
 Correzioni.

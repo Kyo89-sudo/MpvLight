@@ -1,4 +1,4 @@
-// MpvLight Setup 0.5.1 — installer and uninstaller for the current user (no administrator rights).
+// MpvLight Setup 0.5.2 — installer and uninstaller for the current user (no administrator rights).
 //
 // Installs MpvLight.exe (embedded as a resource), downloads the libmpv engine from GitHub through
 // components.hpp, creates shortcuts, "Open with" associations and the entry in Settings > Apps.
@@ -49,7 +49,7 @@ using std::min;
 #pragma comment(lib, "gdiplus.lib")
 using namespace Gdiplus;
 
-static const wchar_t *kVersion = L"0.5.1";
+static const wchar_t *kVersion = L"0.5.2";
 static const wchar_t *kUninstallKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\MpvLight";
 static const wchar_t *kInnoKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\MpvLight_is1";
 static const wchar_t *kProgId = L"MpvLight.Video";
@@ -503,7 +503,7 @@ void roundRect(Graphics &g, const RectF &r, float radius, Color c) {
     roundRect(g, r, radius, b);
 }
 void button(Graphics &g, Hit id, const std::wstring &label, float right, float y, bool primary) {
-    float w = measure(label, fonts.title.get()) + fx(primary ? 52 : 40), h = fx(38);
+    float w = measure(label, fonts.title.get()) + fx(primary ? 52.0f : 40.0f), h = fx(38);
     hits[id] = RectF(right - w, y, w, h);
     if (primary) {
         bool hot = hover == id;

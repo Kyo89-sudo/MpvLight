@@ -7,8 +7,8 @@
 103 RCDATA "../CHANGELOG.md"
 104 RCDATA "../LICENSE-GPL.txt"
 1 VERSIONINFO
-FILEVERSION 0,5,1,0
-PRODUCTVERSION 0,5,1,0
+FILEVERSION 0,5,2,0
+PRODUCTVERSION 0,5,2,0
 FILEOS VOS_NT_WINDOWS32
 FILETYPE VFT_APP
 BEGIN
@@ -19,10 +19,10 @@ BEGIN
    VALUE "FileDescription", "Installazione di MpvLight"
    VALUE "CompanyName", "MpvLight"
    VALUE "LegalCopyright", "GPL-2.0-or-later"
-   VALUE "OriginalFilename", "MpvLight-Setup-0.5.1-x64.exe"
-   VALUE "FileVersion", "0.5.1"
+   VALUE "OriginalFilename", "MpvLight-Setup-0.5.2-x64.exe"
+   VALUE "FileVersion", "0.5.2"
    VALUE "ProductName", "MpvLight"
-   VALUE "ProductVersion", "0.5.1"
+   VALUE "ProductVersion", "0.5.2"
   END
  END
  BLOCK "VarFileInfo"

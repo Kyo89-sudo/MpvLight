@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <strong>0.5.1 · Windows x64 · C++ / Win32 · GPL-2.0-or-later</strong>
+  <strong>0.5.2 · Windows x64 · C++ / Win32 · GPL-2.0-or-later</strong>
 </p>
 
 <p align="center">
@@ -24,9 +24,9 @@
 
 | Versione | Download | Come usarla |
 |---|---|---|
-| **Setup** | [MpvLight-Setup-0.5.1-x64.exe](https://github.com/Kyo89-sudo/MpvLight/releases/download/v0.5.1/MpvLight-Setup-0.5.1-x64.exe) | Installa per l’utente corrente, crea i collegamenti e configura “Apri con”. Non richiede permessi da amministratore. |
-| **Portatile** | [MpvLight-0.5.1-portable-x64.zip](https://github.com/Kyo89-sudo/MpvLight/releases/download/v0.5.1/MpvLight-0.5.1-portable-x64.zip) | Estrai lo ZIP e avvia `MpvLight.exe`. Mantieni `portable.flag` per salvare le impostazioni nella stessa cartella. |
-| **Verifica integrità** | [SHA256SUMS.txt](https://github.com/Kyo89-sudo/MpvLight/releases/download/v0.5.1/SHA256SUMS.txt) | Confronta l’impronta SHA-256 del file scaricato con quella pubblicata. |
+| **Setup** | [MpvLight-Setup-0.5.2-x64.exe](https://github.com/Kyo89-sudo/MpvLight/releases/download/v0.5.2/MpvLight-Setup-0.5.2-x64.exe) | Installa per l’utente corrente, crea i collegamenti e configura “Apri con”. Non richiede permessi da amministratore. |
+| **Portatile** | [MpvLight-0.5.2-portable-x64.zip](https://github.com/Kyo89-sudo/MpvLight/releases/download/v0.5.2/MpvLight-0.5.2-portable-x64.zip) | Estrai lo ZIP e avvia `MpvLight.exe`. Mantieni `portable.flag` per salvare le impostazioni nella stessa cartella. |
+| **Verifica integrità** | [SHA256SUMS.txt](https://github.com/Kyo89-sudo/MpvLight/releases/download/v0.5.2/SHA256SUMS.txt) | Confronta l’impronta SHA-256 del file scaricato con quella pubblicata. |
 
 **Il motore libmpv non è incluso nei pacchetti:** il setup lo scarica durante l’installazione; la versione portatile propone **Scarica il motore** al primo avvio.
 
@@ -108,7 +108,15 @@ Puoi fornire un archivio `mpv-dev-x86_64-….7z` oppure una `libmpv-2.dll` già 
 | `/dir "C:\percorso"` | Cartella di destinazione personalizzata |
 | `/uninstall` | Disinstallazione |
 
+## Pausa su HDD USB
+
+Il programma legge in anticipo fino a **20 secondi**, con un limite di **64 MiB** per i pacchetti compressi nel buffer. Questo permette di ripartire dai dati in RAM mentre un disco meccanico USB si riattiva. In **Aiuto → Informazioni** trovi i secondi effettivamente disponibili.
+
+La quantità dipende da formato e bitrate. Lo standby del disco resta attivo: un seek fuori dal buffer o una lettura lenta possono comunque richiedere attesa.
+
 ## Motore libmpv
+
+Il prefisso **`mpv-dev`** identifica il pacchetto che contiene **`libmpv-2.dll`**, oltre a header e file per sviluppatori. MpvLight estrae solo la DLL: il pacchetto `mpv-…` contiene invece il lettore autonomo. La fonte selezionata pubblica **build Git aggiornate**, non una versione stabile fissata; `/releases/latest` non equivale a un canale stabile di mpv.
 
 | Aspetto | Comportamento |
 |---|---|
@@ -141,8 +149,8 @@ build.cmd
 | File generato | Contenuto |
 |---|---|
 | `portable\MpvLight.exe` | Eseguibile compilato |
-| `dist\MpvLight-Setup-0.5.1-x64.exe` | Setup con app, README, changelog e licenza incorporati |
-| `dist\MpvLight-0.5.1-portable-x64.zip` | Pacchetto portatile con documentazione e `portable.flag`, senza libmpv |
+| `dist\MpvLight-Setup-0.5.2-x64.exe` | Setup con app, README, changelog e licenza incorporati |
+| `dist\MpvLight-0.5.2-portable-x64.zip` | Pacchetto portatile con documentazione e `portable.flag`, senza libmpv |
 | `dist\SHA256SUMS.txt` | Impronte SHA-256 di setup e ZIP |
 
 Se disponibile nella cartella del progetto o nell’installazione locale, `libmpv-2.dll` viene copiata in `portable\`. Il decoder 7z incluso in `third_party/lzma` viene compilato insieme al progetto.
@@ -170,7 +178,7 @@ Le procedure e i requisiti dei test sono descritti in [TESTING.md](TESTING.md). 
 test.cmd C:\percorso\video-con-tracce-e-sottotitoli.mkv
 ```
 
-I binari della release 0.5.1 sono stati compilati con Visual Studio; i test di riproduzione non sono stati eseguiti durante il caricamento su GitHub.
+Per risultati e limiti delle verifiche della versione 0.5.2, consulta [TESTING.md](TESTING.md).
 
 Per [segnalare un problema](https://github.com/Kyo89-sudo/MpvLight/issues), indica versione di MpvLight, versione di Windows, comportamento osservato e passaggi per riprodurlo. Aggiungi formato del file e dettagli del motore quando pertinenti.
 
