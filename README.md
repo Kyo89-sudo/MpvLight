@@ -6,11 +6,11 @@
 
 <p align="center">
   Lettore multimediale leggero per Windows, basato su libmpv.<br>
-  Interfaccia scura, controlli sul video e nessun framework UI aggiuntivo.
+  Tema chiaro o scuro, controlli sul video e nessun framework UI aggiuntivo.
 </p>
 
 <p align="center">
-  <strong>0.5.2 · Windows x64 · C++ / Win32 · GPL-2.0-or-later</strong>
+  <strong>0.6.0 · Windows x64 · C++ / Win32 · GPL-2.0-or-later</strong>
 </p>
 
 <p align="center">
@@ -24,9 +24,9 @@
 
 | Versione | Download | Come usarla |
 |---|---|---|
-| **Setup** | [MpvLight-Setup-0.5.2-x64.exe](https://github.com/Kyo89-sudo/MpvLight/releases/download/v0.5.2/MpvLight-Setup-0.5.2-x64.exe) | Installa per l’utente corrente, crea i collegamenti e configura “Apri con”. Non richiede permessi da amministratore. |
-| **Portatile** | [MpvLight-0.5.2-portable-x64.zip](https://github.com/Kyo89-sudo/MpvLight/releases/download/v0.5.2/MpvLight-0.5.2-portable-x64.zip) | Estrai lo ZIP e avvia `MpvLight.exe`. Mantieni `portable.flag` per salvare le impostazioni nella stessa cartella. |
-| **Verifica integrità** | [SHA256SUMS.txt](https://github.com/Kyo89-sudo/MpvLight/releases/download/v0.5.2/SHA256SUMS.txt) | Confronta l’impronta SHA-256 del file scaricato con quella pubblicata. |
+| **Setup** | [MpvLight-Setup-0.6.0-x64.exe](https://github.com/Kyo89-sudo/MpvLight/releases/download/v0.6.0/MpvLight-Setup-0.6.0-x64.exe) | Installa per l’utente corrente, crea i collegamenti e configura “Apri con”. Non richiede permessi da amministratore. |
+| **Portatile** | [MpvLight-0.6.0-portable-x64.zip](https://github.com/Kyo89-sudo/MpvLight/releases/download/v0.6.0/MpvLight-0.6.0-portable-x64.zip) | Estrai lo ZIP e avvia `MpvLight.exe`. Mantieni `portable.flag` per salvare le impostazioni nella stessa cartella. |
+| **Verifica integrità** | [SHA256SUMS.txt](https://github.com/Kyo89-sudo/MpvLight/releases/download/v0.6.0/SHA256SUMS.txt) | Confronta l’impronta SHA-256 del file scaricato con quella pubblicata. |
 
 **Il motore libmpv non è incluso nei pacchetti:** il setup lo scarica durante l’installazione; la versione portatile propone **Scarica il motore** al primo avvio.
 
@@ -42,7 +42,7 @@ Per aggiungere sottotitoli, trascina il relativo file sul video in riproduzione.
 
 | Area | Cosa offre |
 |---|---|
-| **Interfaccia** | Video a tutta finestra, tema scuro e controlli semitrasparenti sopra il video. |
+| **Interfaccia** | Video a tutta finestra, tema chiaro/scuro e controlli semitrasparenti sopra il video. |
 | **Riproduzione** | Play/pausa, velocità regolabile, avanzamento per fotogrammi e navigazione tra i file della stessa cartella. |
 | **Timeline** | Ricerca nel video con anteprima del tempo al passaggio del mouse. |
 | **Audio e sottotitoli** | Selezione delle tracce, volume, muto e caricamento dei sottotitoli tramite trascinamento. |
@@ -58,6 +58,18 @@ Per aggiungere sottotitoli, trascina il relativo file sul video in riproduzione.
 Muovi il mouse per mostrare la barra. Per impostazione predefinita scompare dopo **2 secondi**, anche in pausa. Resta visibile mentre punti un pulsante, trascini un controllo, a fine file e con contenuti solo audio.
 
 Da **Menu → Finestra** puoi scegliere 2 s, 3,5 s, 6 s o la visualizzazione permanente. Un clic sul tempo passa dalla durata al tempo rimanente. I messaggi di stato compaiono in alto a sinistra e svaniscono automaticamente.
+
+## Aspetto
+
+Da **Menu → Tema** scegli il tema. Il cambiamento è immediato e viene salvato per gli avvii successivi.
+
+| Tema | Comportamento |
+|---|---|
+| **Scuro** | Aspetto originale, selezionato inizialmente |
+| **Chiaro** | Pannelli chiari e testo scuro, con accenti viola |
+| **Segui Windows** | Segue il tema delle app nelle impostazioni di Windows |
+
+La scelta comprende schermata iniziale, menu, controlli sul video, notifiche e finestre secondarie. Non modifica i colori del video o degli screenshot.
 
 ## Scorciatoie
 
@@ -149,8 +161,8 @@ build.cmd
 | File generato | Contenuto |
 |---|---|
 | `portable\MpvLight.exe` | Eseguibile compilato |
-| `dist\MpvLight-Setup-0.5.2-x64.exe` | Setup con app, README, changelog e licenza incorporati |
-| `dist\MpvLight-0.5.2-portable-x64.zip` | Pacchetto portatile con documentazione e `portable.flag`, senza libmpv |
+| `dist\MpvLight-Setup-0.6.0-x64.exe` | Setup con app, README, changelog e licenza incorporati |
+| `dist\MpvLight-0.6.0-portable-x64.zip` | Pacchetto portatile con documentazione e `portable.flag`, senza libmpv |
 | `dist\SHA256SUMS.txt` | Impronte SHA-256 di setup e ZIP |
 
 Se disponibile nella cartella del progetto o nell’installazione locale, `libmpv-2.dll` viene copiata in `portable\`. Il decoder 7z incluso in `third_party/lzma` viene compilato insieme al progetto.
@@ -162,6 +174,8 @@ Per cambiare versione, aggiorna `VERSION` in `build.cmd`, `kVersion` nei sorgent
 | Percorso | Contenuto |
 |---|---|
 | `src/` | App Win32, interfaccia, riproduzione e gestione del motore |
+| `src/ui_theme.hpp` | Palette e preferenze del tema |
+| `src/engine_queue.hpp` | Ordine e accorpamento dei comandi al motore |
 | `src/mpv/` | Header dell’API libmpv |
 | `assets/` | Icona PNG/ICO e script di generazione |
 | `packaging/` | Sorgenti e risorse del setup |
@@ -178,7 +192,7 @@ Le procedure e i requisiti dei test sono descritti in [TESTING.md](TESTING.md). 
 test.cmd C:\percorso\video-con-tracce-e-sottotitoli.mkv
 ```
 
-Per risultati e limiti delle verifiche della versione 0.5.2, consulta [TESTING.md](TESTING.md).
+Per risultati e limiti delle verifiche della versione 0.6.0, consulta [TESTING.md](TESTING.md).
 
 Per [segnalare un problema](https://github.com/Kyo89-sudo/MpvLight/issues), indica versione di MpvLight, versione di Windows, comportamento osservato e passaggi per riprodurlo. Aggiungi formato del file e dettagli del motore quando pertinenti.
 

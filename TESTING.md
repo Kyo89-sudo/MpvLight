@@ -1,5 +1,14 @@
 # Verifiche
 
+## 0.6.0 — temi e regressioni
+
+- MSVC x64 `/W4`: compilazione di app e setup senza avvisi.
+- Test rapidi: valori persistenti del tema e fallback per valori non validi; contrasto almeno 4,5:1 per testo principale, secondario e didascalie su tutti i pannelli; accorpamento dei seek/volume senza attraversare apertura, stop, pausa e screenshot.
+- Suite di integrazione completa superata, compresi seek, tracce, catture non valide, stress della coda, EOF, gestione errori e ripresa dopo pause di 1 / 5 / 30 secondi (206 / 206 / 207 ms, inclusi 200 ms di avanzamento).
+- Prova GUI sulla build isolata: cambio immediato scuro → chiaro, barra del titolo, schermata iniziale, Aiuto/Informazioni e salvataggio `Appearance/Theme=1` verificati.
+
+Il test del contrasto riguarda i colori opachi della palette. Sui video il contrasto dipende anche dall'immagine sotto la barra semitrasparente. La modalità Segui Windows usa `AppsUseLightTheme` e reagisce a `WM_SETTINGCHANGE`; le preferenze globali di Windows non vengono modificate dai test.
+
 ## 0.5.2 — pausa e ripresa
 
 Eseguiti su Windows con MSVC e la libmpv già installata: suite completa superata; ripresa dopo 1 / 5 / 30 secondi di pausa rispettivamente in 206 / 207 / 208 ms (inclusi 200 ms di avanzamento richiesti dal test). Il buffer supera 5 secondi di dati.

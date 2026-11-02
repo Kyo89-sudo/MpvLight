@@ -1,4 +1,4 @@
-// MpvLight 0.5.2 — interfaccia Win32 in stile mpv: il video riempie la finestra e i controlli
+// MpvLight 0.6.0 — interfaccia Win32 in stile mpv: il video riempie la finestra e i controlli
 // compaiono sopra il video in finestre "layered" semitrasparenti che si nascondono da sole.
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -11,6 +11,7 @@
 #endif
 #include "engine.hpp"
 #include "playback.hpp"
+#include "ui_theme.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -50,15 +51,17 @@ using std::min;
 #pragma comment(lib, "gdiplus.lib")
 using namespace Gdiplus;
 
-static const wchar_t *kVersion = L"0.5.2";
+static const wchar_t *kVersion = L"0.6.0";
 
 // ---------------------------------------------------------------------------------------------
 // Palette
 // ---------------------------------------------------------------------------------------------
-constexpr COLORREF cWindow = RGB(13, 12, 18), cPanel = RGB(22, 21, 29), cPanel2 = RGB(31, 29, 40);
-constexpr COLORREF cText = RGB(240, 238, 248), cMuted = RGB(160, 156, 180), cFaint = RGB(112, 108, 132);
-constexpr COLORREF cViolet = RGB(139, 92, 246), cPink = RGB(236, 72, 153), cLilac = RGB(192, 132, 252);
-constexpr COLORREF cError = RGB(248, 113, 113);
+ThemeMode themeMode = ThemeMode::Dark;
+bool darkTheme = true;
+ThemeColors colors = themeColors(true);
+HBRUSH panelBrush{}, controlBrush{};
+void applyTheme();
+void themeWindow(HWND window);
 
 // Icon-font code points (Segoe Fluent Icons on Windows 11, Segoe MDL2 Assets on Windows 10).
 namespace G {
@@ -99,6 +102,9 @@ enum Cmd : UINT {
     CmdSpeedReset,
     CmdOpenFolder,
     CmdQuit,
+    CmdThemeDark,
+    CmdThemeLight,
+    CmdThemeSystem,
     CmdAudioOff = 500,
     CmdVideoOff,
     CmdSubOff,
@@ -403,6 +409,7 @@ void addRecent(const std::wstring &path) {
     hostDirty = true;
 }
 void loadSettings() {
+    themeMode = themeModeFromSetting(readInt(L"Appearance", L"Theme", 0));
     for (int i = 0; i < 8; ++i) {
         auto p = readIni(L"Recent", (L"File" + std::to_wstring(i)).c_str(), L"");
         if (!p.empty())
@@ -417,6 +424,7 @@ void loadSettings() {
     startVolume = std::clamp(readInt(L"Player", L"Volume", 75), 0, 100);
 }
 void saveSettings() {
+    writeIni(L"Appearance", L"Theme", std::to_wstring(static_cast<int>(themeMode)));
     writeIni(L"Player", L"AutoNext", autoNext ? L"1" : L"0");
     writeIni(L"Player", L"OnTop", onTop ? L"1" : L"0");
     writeIni(L"Player", L"FitWindow", fitWindow ? L"1" : L"0");
@@ -1005,8 +1013,8 @@ void bubble(Graphics &g, const std::wstring &s, float cx, float bottom, float W,
     float tw = measure(s, fonts.caption.get()), bw = tw + fx(18), bh = fx(26);
     float x = std::clamp(cx - bw / 2, fx(4), std::max(fx(4), W - bw - fx(4)));
     RectF r(x, bottom - bh, bw, bh);
-    fillRound(g, r, fx(6), argb(static_cast<int>(238 * a), RGB(18, 17, 24)));
-    drawText(g, s, fonts.caption.get(), r, argb(static_cast<int>(255 * a), cText), StringAlignmentCenter);
+    fillRound(g, r, fx(6), argb(static_cast<int>(238 * a), colors.panel2));
+    drawText(g, s, fonts.caption.get(), r, argb(static_cast<int>(255 * a), colors.text), StringAlignmentCenter);
 }
 void drawBar(Graphics &g, float W, float H) {
     float a = barAlpha;
@@ -1014,30 +1022,30 @@ void drawBar(Graphics &g, float W, float H) {
     auto L = barLayout(W, H);
     if (full && !playback.title.empty())
         drawText(g, playback.title, fonts.title.get(), RectF(fx(16), H - fx(128), W - fx(32), fx(24)),
-                 argb(A(245), cText));
+                 argb(A(245), colors.text));
     // Seek bar
     bool seekable = canSeek();
     bool hot = seekable && (hover == PSeek || scrubbing);
     float th = hot ? fx(5) : fx(3), tl = L.seekL, tr = L.seekR, ty = L.seekY;
     fillRound(g, RectF(tl, ty - th / 2, tr - tl, th), th / 2,
-              argb(A(seekable ? 72 : 40), RGB(255, 255, 255)));
+              argb(A(seekable ? 72 : 40), colors.text));
     if (seekable) {
         double pos = scrubbing ? previewTime : displayTime();
         float frac = static_cast<float>(std::clamp(pos / playback.duration, 0.0, 1.0));
         float hx = std::clamp(hoverX, tl, tr);
         if (hot && !scrubbing && hx > tl + (tr - tl) * frac)
-            fillRound(g, RectF(tl, ty - th / 2, hx - tl, th), th / 2, argb(A(60), RGB(255, 255, 255)));
+            fillRound(g, RectF(tl, ty - th / 2, hx - tl, th), th / 2, argb(A(60), colors.text));
         float pw = (tr - tl) * frac;
         if (pw > 0.5f) {
-            LinearGradientBrush played(PointF(tl - 1, 0), PointF(tr + 1, 0), argb(A(255), cViolet),
-                                       argb(A(255), cPink));
+            LinearGradientBrush played(PointF(tl - 1, 0), PointF(tr + 1, 0), argb(A(255), colors.violet),
+                                       argb(A(255), colors.pink));
             fillRound(g, RectF(tl, ty - th / 2, pw, th), th / 2, played);
         }
         if (hot) {
             float kx = tl + pw, kr = fx(7);
             SolidBrush shade(Color(static_cast<BYTE>(A(90)), 0, 0, 0));
             g.FillEllipse(&shade, kx - kr, ty - kr + fx(1), kr * 2, kr * 2);
-            SolidBrush knob(argb(A(255), RGB(255, 255, 255)));
+            SolidBrush knob(argb(A(255), colors.text));
             g.FillEllipse(&knob, kx - kr, ty - kr, kr * 2, kr * 2);
             double t = scrubbing ? previewTime : playback.duration * (hx - tl) / (tr - tl);
             bubble(g, clockText(t), scrubbing ? kx : hx, ty - fx(14), W, a);
@@ -1051,7 +1059,7 @@ void drawBar(Graphics &g, float W, float H) {
         bool en = partEnabled(p);
         if (hover == p && en) {
             float rad = r.Width * 0.44f, cx = r.X + r.Width / 2, cy = r.Y + r.Height / 2;
-            SolidBrush hl(argb(A(pressed == p ? 60 : 34), RGB(255, 255, 255)));
+            SolidBrush hl(argb(A(pressed == p ? 60 : 34), colors.text));
             g.FillEllipse(&hl, cx - rad, cy - rad, rad * 2, rad * 2);
         }
         wchar_t ch = 0;
@@ -1084,24 +1092,24 @@ void drawBar(Graphics &g, float W, float H) {
             break;
         }
         drawGlyph(g, ch, p == PPlay ? fonts.iconPlay.get() : fonts.icon.get(), r,
-                  argb(A(en ? 246 : 92), RGB(255, 255, 255)));
+                  argb(A(en ? 246 : 92), colors.text));
         if (p == PSubs && trackSelected("sub")) {
             float cx = r.X + r.Width / 2;
             fillRound(g, RectF(cx - fx(7), r.GetBottom() - fx(8), fx(14), fx(2.5f)), fx(1.2f),
-                      argb(A(255), cLilac));
+                      argb(A(255), colors.lilac));
         }
     }
     // Volume slider
     if (L.on[PVolume]) {
         float vl = L.volL, vr = L.volR, vy = L.cy, vh = fx(3);
         float frac = static_cast<float>(std::clamp(playback.volume / 100.0, 0.0, 1.0));
-        fillRound(g, RectF(vl, vy - vh / 2, vr - vl, vh), vh / 2, argb(A(80), RGB(255, 255, 255)));
+        fillRound(g, RectF(vl, vy - vh / 2, vr - vl, vh), vh / 2, argb(A(80), colors.text));
         if (frac > 0)
             fillRound(g, RectF(vl, vy - vh / 2, (vr - vl) * frac, vh), vh / 2,
-                      argb(A(playback.muted ? 110 : 245), RGB(255, 255, 255)));
+                      argb(A(playback.muted ? 110 : 245), colors.text));
         if (hover == PVolume || volumeDrag) {
             float kx = vl + (vr - vl) * frac, kr = fx(6);
-            SolidBrush knob(argb(A(255), RGB(255, 255, 255)));
+            SolidBrush knob(argb(A(255), colors.text));
             g.FillEllipse(&knob, kx - kr, vy - kr, kr * 2, kr * 2);
         }
     }
@@ -1111,16 +1119,16 @@ void drawBar(Graphics &g, float W, float H) {
         auto slash = t.find(L" / ");
         RectF r = L.r[PTime];
         if (hover == PTime)
-            fillRound(g, r, fx(6), argb(A(26), RGB(255, 255, 255)));
+            fillRound(g, r, fx(6), argb(A(26), colors.text));
         RectF inner(r.X + fx(5), r.Y, r.Width - fx(5), r.Height);
         if (slash == std::wstring::npos)
-            drawText(g, t, fonts.semi.get(), inner, argb(A(246), cText));
+            drawText(g, t, fonts.semi.get(), inner, argb(A(246), colors.text));
         else {
             auto head = t.substr(0, slash);
-            drawText(g, head, fonts.semi.get(), inner, argb(A(246), cText));
+            drawText(g, head, fonts.semi.get(), inner, argb(A(246), colors.text));
             float hw = measure(head, fonts.semi.get());
             RectF tail(inner.X + hw, inner.Y, inner.Width - hw + fx(4), inner.Height);
-            drawText(g, t.substr(slash), fonts.semi.get(), tail, argb(A(175), RGB(200, 196, 214)));
+            drawText(g, t.substr(slash), fonts.semi.get(), tail, argb(A(175), colors.muted));
         }
     }
     // Speed
@@ -1128,13 +1136,13 @@ void drawBar(Graphics &g, float W, float H) {
         RectF r = L.r[PSpeed];
         bool en = partEnabled(PSpeed), changed = std::abs(playback.speed - 1) > 0.01;
         if (hover == PSpeed && en)
-            fillRound(g, r, fx(5), argb(A(34), RGB(255, 255, 255)));
+            fillRound(g, r, fx(5), argb(A(34), colors.text));
         GraphicsPath path;
         roundRect(path, r, fx(5));
-        Pen outline(changed ? argb(A(255), cLilac) : argb(A(en ? 120 : 60), RGB(255, 255, 255)), fx(1));
+        Pen outline(changed ? argb(A(255), colors.lilac) : argb(A(en ? 120 : 60), colors.text), fx(1));
         g.DrawPath(&outline, &path);
         drawText(g, speedText(playback.speed), fonts.smallSemi.get(), r,
-                 changed ? argb(A(255), cLilac) : argb(A(en ? 235 : 92), RGB(255, 255, 255)),
+                 changed ? argb(A(255), colors.lilac) : argb(A(en ? 235 : 92), colors.text),
                  StringAlignmentCenter);
     }
     // Tooltip
@@ -1159,7 +1167,11 @@ void fillScrim(uint32_t *pixels, int W, int H) {
         for (int x = 0; x < W; ++x) {
             int v =
                 static_cast<int>(a + ditherNoise(static_cast<uint32_t>(x), static_cast<uint32_t>(y)) + 0.5f);
-            row[x] = static_cast<uint32_t>(std::clamp(v, 1, 255)) << 24; // premultiplied black
+            const uint32_t alpha = static_cast<uint32_t>(std::clamp(v, 1, 255));
+            // Layered windows require premultiplied BGRA, also for a light scrim.
+            const COLORREF shade = darkTheme ? RGB(0, 0, 0) : colors.panel;
+            row[x] = (alpha << 24) | ((GetRValue(shade) * alpha / 255) << 16) |
+                     ((GetGValue(shade) * alpha / 255) << 8) | (GetBValue(shade) * alpha / 255);
         }
     }
 }
@@ -1194,12 +1206,12 @@ void renderOsd() {
     int W = static_cast<int>(tw + fx(34)), H = px(40);
     osdSurface.present(osdWnd, v.left + px(18), v.top + px(18), W, H, [&](Graphics &g) {
         RectF r(0, 0, static_cast<REAL>(W), static_cast<REAL>(H));
-        fillRound(g, r, fx(9), argb(static_cast<int>(222 * a), RGB(16, 15, 22)));
+        fillRound(g, r, fx(9), argb(static_cast<int>(222 * a), colors.panel));
         fillRound(g, RectF(0, fx(8), fx(3), static_cast<REAL>(H) - fx(16)), fx(1.5f),
-                  argb(static_cast<int>(255 * a), osdError ? cError : RGB(167, 139, 250)));
+                  argb(static_cast<int>(255 * a), osdError ? colors.error : colors.lilac));
         drawText(g, osdText, fonts.osd.get(),
                  RectF(fx(16), 0, static_cast<REAL>(W) - fx(26), static_cast<REAL>(H)),
-                 argb(static_cast<int>(255 * a), osdError ? RGB(254, 202, 202) : cText));
+                 argb(static_cast<int>(255 * a), osdError ? colors.error : colors.text));
     });
     if (!IsWindowVisible(osdWnd) && mainShown())
         ShowWindow(osdWnd, SW_SHOWNOACTIVATE);
@@ -1209,7 +1221,7 @@ void renderOsd() {
 // ---------------------------------------------------------------------------------------------
 // Menus
 // ---------------------------------------------------------------------------------------------
-void darkMenus() {
+void themeMenus() {
     // Undocumented but stable since Windows 10 1903: dark popup menus for the whole process.
     if (HMODULE ux = LoadLibraryExW(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32)) {
         using SetMode = int(WINAPI *)(int);
@@ -1217,10 +1229,27 @@ void darkMenus() {
         auto set = reinterpret_cast<SetMode>(GetProcAddress(ux, MAKEINTRESOURCEA(135)));
         auto flush = reinterpret_cast<Flush>(GetProcAddress(ux, MAKEINTRESOURCEA(136)));
         if (set)
-            set(2);
+            set(darkTheme ? 2 : 3); // ForceDark / ForceLight
         if (flush)
             flush();
+        FreeLibrary(ux);
     }
+}
+bool systemUsesDarkTheme() {
+    DWORD light = 1, size = sizeof(light);
+    RegGetValueW(HKEY_CURRENT_USER,
+                 L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                 L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &light, &size);
+    return light == 0;
+}
+void themeWindow(HWND window) {
+    if (!window)
+        return;
+    BOOL dark = darkTheme ? TRUE : FALSE;
+    DwmSetWindowAttribute(window, 20, &dark, sizeof(dark));
+    DwmSetWindowAttribute(window, DWMWA_CAPTION_COLOR, &colors.panel, sizeof(colors.panel));
+    DwmSetWindowAttribute(window, DWMWA_TEXT_COLOR, &colors.text, sizeof(colors.text));
+    DwmSetWindowAttribute(window, DWMWA_BORDER_COLOR, &colors.border, sizeof(colors.border));
 }
 std::wstring menuEscape(std::wstring s) {
     std::wstring out;
@@ -1336,6 +1365,11 @@ HMENU fullMenu() {
     for (UINT i = 0; i < 4; ++i)
         item(view, CmdBarTimeout + i, barLabels[i], true, barTimeout == kBarTimeouts[i], true);
     submenu(m, view, L"Finestra");
+    HMENU appearance = CreatePopupMenu();
+    item(appearance, CmdThemeDark, L"Scuro", true, themeMode == ThemeMode::Dark, true);
+    item(appearance, CmdThemeLight, L"Chiaro", true, themeMode == ThemeMode::Light, true);
+    item(appearance, CmdThemeSystem, L"Segui Windows", true, themeMode == ThemeMode::System, true);
+    submenu(m, appearance, L"Tema");
     separator(m);
     item(m, CmdHelp, L"Scorciatoie da tastiera\tF1");
     item(m, CmdAbout, L"Informazioni su MpvLight");
@@ -1372,16 +1406,14 @@ void barMenu(Part p) {
 // ---------------------------------------------------------------------------------------------
 // Dialogs: go to time, screenshot folder, help/about
 // ---------------------------------------------------------------------------------------------
-HBRUSH panelBrush{}, controlBrush{};
 INT_PTR CALLBACK timeDialogProc(HWND dialog, UINT msg, WPARAM a, LPARAM) {
     switch (msg) {
     case WM_INITDIALOG: {
-        BOOL dark = TRUE;
-        DwmSetWindowAttribute(dialog, 20, &dark, sizeof(dark));
+        themeWindow(dialog);
         timeEdit = GetDlgItem(dialog, 122);
-        SetWindowTheme(timeEdit, L"DarkMode_CFD", nullptr);
-        SetWindowTheme(GetDlgItem(dialog, IDOK), L"DarkMode_Explorer", nullptr);
-        SetWindowTheme(GetDlgItem(dialog, IDCANCEL), L"DarkMode_Explorer", nullptr);
+        SetWindowTheme(timeEdit, darkTheme ? L"DarkMode_CFD" : L"Explorer", nullptr);
+        SetWindowTheme(GetDlgItem(dialog, IDOK), darkTheme ? L"DarkMode_Explorer" : L"Explorer", nullptr);
+        SetWindowTheme(GetDlgItem(dialog, IDCANCEL), darkTheme ? L"DarkMode_Explorer" : L"Explorer", nullptr);
         SendMessageW(timeEdit, EM_SETLIMITTEXT, 30, 0);
         SetWindowTextW(timeEdit, clockText(displayTime()).c_str());
         SetDlgItemTextW(dialog, 301, (L"Durata " + clockText(playback.duration)).c_str());
@@ -1393,8 +1425,8 @@ INT_PTR CALLBACK timeDialogProc(HWND dialog, UINT msg, WPARAM a, LPARAM) {
         return reinterpret_cast<INT_PTR>(panelBrush);
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
-        SetTextColor(reinterpret_cast<HDC>(a), cText);
-        SetBkColor(reinterpret_cast<HDC>(a), msg == WM_CTLCOLOREDIT ? cPanel2 : cPanel);
+        SetTextColor(reinterpret_cast<HDC>(a), colors.text);
+        SetBkColor(reinterpret_cast<HDC>(a), msg == WM_CTLCOLOREDIT ? colors.panel2 : colors.panel);
         return reinterpret_cast<INT_PTR>(msg == WM_CTLCOLOREDIT ? controlBrush : panelBrush);
     case WM_COMMAND:
         if (LOWORD(a) == IDCANCEL) {
@@ -1487,7 +1519,7 @@ void paintHelp(HWND w) {
         Graphics g(dc);
         g.SetSmoothingMode(SmoothingModeAntiAlias);
         g.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
-        SolidBrush bg(argb(255, cPanel));
+        SolidBrush bg(argb(255, colors.panel));
         g.FillRectangle(&bg, 0.0f, 0.0f, W, H);
         // Tabs
         const wchar_t *tabs[] = {L"Scorciatoie", L"Informazioni"};
@@ -1496,14 +1528,14 @@ void paintHelp(HWND w) {
             float tw = measure(tabs[i], fonts.title.get()) + fx(24);
             helpTabs[i] = RectF(x, fx(16), tw, fx(34));
             if (i == helpTab)
-                fillRound(g, helpTabs[i], fx(8), argb(255, cPanel2));
+                fillRound(g, helpTabs[i], fx(8), argb(255, colors.panel2));
             else if (helpHover == i)
-                fillRound(g, helpTabs[i], fx(8), argb(255, RGB(27, 26, 35)));
-            drawText(g, tabs[i], fonts.title.get(), helpTabs[i], argb(255, i == helpTab ? cText : cMuted),
+                fillRound(g, helpTabs[i], fx(8), argb(255, colors.hover));
+            drawText(g, tabs[i], fonts.title.get(), helpTabs[i], argb(255, i == helpTab ? colors.text : colors.muted),
                      StringAlignmentCenter);
             if (i == helpTab) {
                 LinearGradientBrush line(PointF(helpTabs[i].X, 0), PointF(helpTabs[i].GetRight(), 0),
-                                         argb(255, cViolet), argb(255, cPink));
+                                         argb(255, colors.violet), argb(255, colors.pink));
                 fillRound(g,
                           RectF(helpTabs[i].X + fx(12), helpTabs[i].GetBottom() - fx(3),
                                 helpTabs[i].Width - fx(24), fx(2.5f)),
@@ -1513,18 +1545,18 @@ void paintHelp(HWND w) {
         }
         helpClose = RectF(W - fx(52), fx(16), fx(34), fx(34));
         if (helpHover == 9)
-            fillRound(g, helpClose, fx(8), argb(255, cPanel2));
-        drawGlyph(g, G::Close, fonts.caption.get(), helpClose, argb(255, cMuted));
-        SolidBrush rule(argb(255, RGB(38, 36, 48)));
+            fillRound(g, helpClose, fx(8), argb(255, colors.panel2));
+        drawGlyph(g, G::Close, fonts.icon.get(), helpClose, argb(255, colors.muted));
+        SolidBrush rule(argb(255, colors.border));
         g.FillRectangle(&rule, fx(24), fx(60), W - fx(48), fx(1));
         float y = fx(78);
         if (helpTab == 0) {
             for (auto &row : kShortcuts) {
                 RectF key(fx(24), y + fx(2), measure(row[0], fonts.smallSemi.get()) + fx(18), fx(24));
-                fillRound(g, key, fx(6), argb(255, cPanel2));
-                drawText(g, row[0], fonts.smallSemi.get(), key, argb(255, cText), StringAlignmentCenter);
+                fillRound(g, key, fx(6), argb(255, colors.panel2));
+                drawText(g, row[0], fonts.smallSemi.get(), key, argb(255, colors.text), StringAlignmentCenter);
                 drawText(g, row[1], fonts.text.get(), RectF(fx(250), y, W - fx(274), fx(28)),
-                         argb(255, cMuted));
+                         argb(255, colors.muted));
                 y += fx(31);
             }
         } else {
@@ -1534,14 +1566,14 @@ void paintHelp(HWND w) {
                 g.ReleaseHDC(idc);
             }
             drawText(g, L"MpvLight", fonts.hero.get(), RectF(fx(112), fx(82), W - fx(136), fx(40)),
-                     argb(255, cText));
+                     argb(255, colors.text));
             drawText(g, std::wstring(L"Versione ") + kVersion + L" · Windows x64", fonts.text.get(),
-                     RectF(fx(114), fx(122), W - fx(136), fx(24)), argb(255, cMuted));
+                     RectF(fx(114), fx(122), W - fx(136), fx(24)), argb(255, colors.muted));
             y = fx(176);
             auto line = [&](const std::wstring &label, const std::wstring &value) {
-                drawText(g, label, fonts.caption.get(), RectF(fx(24), y, fx(150), fx(24)), argb(255, cFaint));
+                drawText(g, label, fonts.caption.get(), RectF(fx(24), y, fx(150), fx(24)), argb(255, colors.faint));
                 drawText(g, value.empty() ? L"—" : value, fonts.text.get(),
-                         RectF(fx(174), y, W - fx(198), fx(24)), argb(255, cText));
+                         RectF(fx(174), y, W - fx(198), fx(24)), argb(255, colors.text));
                 y += fx(30);
             };
             line(L"Motore", playback.version.empty() ? L"libmpv non caricata" : playback.version);
@@ -1558,19 +1590,19 @@ void paintHelp(HWND w) {
             drawText(
                 g,
                 L"Lettore leggero basato su libmpv. Interfaccia Win32 nativa, motore su un thread dedicato.",
-                fonts.caption.get(), RectF(fx(24), y, W - fx(48), fx(22)), argb(255, cMuted));
+                fonts.caption.get(), RectF(fx(24), y, W - fx(48), fx(22)), argb(255, colors.muted));
             y += fx(22);
             drawText(
                 g, L"Codice sotto licenza GPL-2.0-or-later. La DLL libmpv è una build di terzi (mpv/FFmpeg).",
-                fonts.caption.get(), RectF(fx(24), y, W - fx(48), fx(22)), argb(255, cMuted));
+                fonts.caption.get(), RectF(fx(24), y, W - fx(48), fx(22)), argb(255, colors.muted));
             y += fx(36);
             const wchar_t *links[] = {L"MpvLight su GitHub", L"Build libmpv", L"Progetto mpv"};
             float lx = fx(24);
             for (int i = 0; i < 3; ++i) {
                 float lw = measure(links[i], fonts.semi.get()) + fx(28);
                 helpLinks[i] = RectF(lx, y, lw, fx(32));
-                fillRound(g, helpLinks[i], fx(8), argb(255, helpHover == 10 + i ? RGB(44, 40, 58) : cPanel2));
-                drawText(g, links[i], fonts.semi.get(), helpLinks[i], argb(255, cLilac),
+                fillRound(g, helpLinks[i], fx(8), argb(255, helpHover == 10 + i ? colors.hover : colors.panel2));
+                drawText(g, links[i], fonts.semi.get(), helpLinks[i], argb(255, colors.lilac),
                          StringAlignmentCenter);
                 lx += lw + fx(10);
             }
@@ -1668,10 +1700,7 @@ void showHelp(int tab) {
     helpWnd = CreateWindowExW(WS_EX_DLGMODALFRAME, L"MpvLightHelp", L"Aiuto — MpvLight", style,
                               (owner.left + owner.right - w) / 2, (owner.top + owner.bottom - h) / 2, w, h,
                               mainWindow, nullptr, appInstance, nullptr);
-    BOOL dark = TRUE;
-    DwmSetWindowAttribute(helpWnd, 20, &dark, sizeof(dark));
-    COLORREF caption = cPanel;
-    DwmSetWindowAttribute(helpWnd, DWMWA_CAPTION_COLOR, &caption, sizeof(caption));
+    themeWindow(helpWnd);
     EnableWindow(mainWindow, FALSE);
     ShowWindow(helpWnd, SW_SHOW);
 }
@@ -1806,30 +1835,30 @@ void paintUpdate(HWND w) {
         Graphics g(dc);
         g.SetSmoothingMode(SmoothingModeAntiAlias);
         g.SetTextRenderingHint(TextRenderingHintClearTypeGridFit);
-        SolidBrush bg(argb(255, cPanel));
+        SolidBrush bg(argb(255, colors.panel));
         g.FillRectangle(&bg, 0.0f, 0.0f, W, H);
         float x = fx(24), y = fx(20), cw = W - fx(48);
-        drawText(g, L"Motore libmpv", fonts.hero.get(), RectF(x, y, cw, fx(40)), argb(255, cText));
+        drawText(g, L"Motore libmpv", fonts.hero.get(), RectF(x, y, cw, fx(40)), argb(255, colors.text));
         y += fx(50);
         std::wstring installed = comp::installedBuild();
         if (installed.empty())
             installed = playback.ready ? playback.version : L"non installato";
-        drawText(g, L"Installato", fonts.caption.get(), RectF(x, y, fx(110), fx(24)), argb(255, cFaint));
+        drawText(g, L"Installato", fonts.caption.get(), RectF(x, y, fx(110), fx(24)), argb(255, colors.faint));
         drawText(g, installed, fonts.text.get(), RectF(x + fx(110), y, cw - fx(110), fx(24)),
-                 argb(255, cText));
+                 argb(255, colors.text));
         y += fx(28);
-        drawText(g, L"Disponibile", fonts.caption.get(), RectF(x, y, fx(110), fx(24)), argb(255, cFaint));
+        drawText(g, L"Disponibile", fonts.caption.get(), RectF(x, y, fx(110), fx(24)), argb(255, colors.faint));
         std::wstring avail = upPhase == UpPhase::Checking ? L"ricerca in corso…"
                              : upHasAsset                 ? comp::widen(upAsset.name)
                                                           : L"—";
-        drawText(g, avail, fonts.text.get(), RectF(x + fx(110), y, cw - fx(110), fx(24)), argb(255, cText));
+        drawText(g, avail, fonts.text.get(), RectF(x + fx(110), y, cw - fx(110), fx(24)), argb(255, colors.text));
         y += fx(40);
         // Status / progress
         if (upPhase == UpPhase::Working) {
-            drawText(g, upReport.text, fonts.text.get(), RectF(x, y, cw, fx(24)), argb(255, cMuted));
+            drawText(g, upReport.text, fonts.text.get(), RectF(x, y, cw, fx(24)), argb(255, colors.muted));
             y += fx(32);
             RectF track(x, y, cw, fx(8));
-            fillRound(g, track, fx(4), argb(255, cPanel2));
+            fillRound(g, track, fx(4), argb(255, colors.panel2));
             float frac =
                 upReport.fraction < 0 ? 0.35f : static_cast<float>(std::clamp(upReport.fraction, 0.0, 1.0));
             float start = 0;
@@ -1837,16 +1866,16 @@ void paintUpdate(HWND w) {
                 start = static_cast<float>((GetTickCount64() % 1400) / 1400.0) * (1 - frac);
             if (frac > 0) {
                 RectF fill(x + cw * start, y, std::max(fx(8), cw * frac), fx(8));
-                LinearGradientBrush brush(PointF(x - 1, 0), PointF(x + cw + 1, 0), argb(255, cViolet),
-                                          argb(255, cPink));
+                LinearGradientBrush brush(PointF(x - 1, 0), PointF(x + cw + 1, 0), argb(255, colors.violet),
+                                          argb(255, colors.pink));
                 fillRound(g, fill, fx(4), brush);
             }
         } else {
             StringFormat wrap;
             wrap.SetLineAlignment(StringAlignmentNear);
-            SolidBrush ink(argb(255, upFailed                       ? cError
-                                     : upPhase == UpPhase::Finished ? RGB(134, 239, 172)
-                                                                    : cMuted));
+            SolidBrush ink(argb(255, upFailed                       ? colors.error
+                                     : upPhase == UpPhase::Finished ? colors.success
+                                                                    : colors.muted));
             std::wstring text = upMessage;
             if (upPhase == UpPhase::Ready && upHasAsset) {
                 bool same = comp::installedBuild() == comp::widen(upAsset.name);
@@ -1890,8 +1919,8 @@ void paintUpdate(HWND w) {
         float sw = measure(secondary, fonts.title.get()) + fx(40);
         upButtons[1] = RectF(bx - sw, by, sw, bh);
         bx -= sw + fx(10);
-        fillRound(g, upButtons[1], bh / 2, argb(255, upHover == 1 ? RGB(48, 45, 62) : cPanel2));
-        drawText(g, secondary, fonts.title.get(), upButtons[1], argb(255, cText), StringAlignmentCenter);
+        fillRound(g, upButtons[1], bh / 2, argb(255, upHover == 1 ? colors.hover : colors.panel2));
+        drawText(g, secondary, fonts.title.get(), upButtons[1], argb(255, colors.text), StringAlignmentCenter);
         if (primary) {
             float pw = measure(primary, fonts.title.get()) + fx(48);
             upButtons[0] = RectF(bx - pw, by, pw, bh);
@@ -1906,7 +1935,7 @@ void paintUpdate(HWND w) {
             const wchar_t *t = L"Usa un file già scaricato…";
             upButtons[2] = RectF(fx(24), by, measure(t, fonts.text.get()) + fx(4), bh);
             drawText(g, t, fonts.text.get(), upButtons[2],
-                     argb(255, upHover == 2 ? RGB(216, 180, 254) : cLilac));
+                     argb(255, upHover == 2 ? colors.violet : colors.lilac));
         }
     }
     BitBlt(target, 0, 0, rc.right, rc.bottom, dc, 0, 0, SRCCOPY);
@@ -2009,10 +2038,7 @@ void showEngineUpdate() {
     updateWnd = CreateWindowExW(WS_EX_DLGMODALFRAME, L"MpvLightUpdate", L"Aggiorna motore — MpvLight", style,
                                 (owner.left + owner.right - w) / 2, (owner.top + owner.bottom - h) / 2, w, h,
                                 mainWindow, nullptr, appInstance, nullptr);
-    BOOL dark = TRUE;
-    DwmSetWindowAttribute(updateWnd, 20, &dark, sizeof(dark));
-    COLORREF caption = cPanel;
-    DwmSetWindowAttribute(updateWnd, DWMWA_CAPTION_COLOR, &caption, sizeof(caption));
+    themeWindow(updateWnd);
     upHover = -1;
     upStartCheck();
     SetTimer(updateWnd, 1, 50, nullptr);
@@ -2048,6 +2074,15 @@ void runCommand(UINT id) {
         return;
     }
     switch (id) {
+    case CmdThemeDark:
+    case CmdThemeLight:
+    case CmdThemeSystem:
+        themeMode = id == CmdThemeLight ? ThemeMode::Light
+                    : id == CmdThemeSystem ? ThemeMode::System : ThemeMode::Dark;
+        writeIni(L"Appearance", L"Theme", std::to_wstring(static_cast<int>(themeMode)));
+        applyTheme();
+        poke();
+        break;
     case CmdAudioOff:
     case CmdVideoOff:
     case CmdSubOff:
@@ -2341,6 +2376,35 @@ void releaseBackground() {
         DeleteObject(background.bitmap);
     background = BackgroundCache{};
 }
+void applyTheme() {
+    darkTheme = themeMode == ThemeMode::Dark ||
+                (themeMode == ThemeMode::System && systemUsesDarkTheme());
+    colors = themeColors(darkTheme);
+    themeMenus();
+    if (panelBrush)
+        DeleteObject(panelBrush);
+    if (controlBrush)
+        DeleteObject(controlBrush);
+    panelBrush = CreateSolidBrush(colors.panel);
+    controlBrush = CreateSolidBrush(colors.panel2);
+    releaseBackground();
+    for (HWND window : {mainWindow, helpWnd, updateWnd}) {
+        themeWindow(window);
+        if (window)
+            InvalidateRect(window, nullptr, TRUE);
+    }
+    hostDirty = barDirty = osdDirty = true;
+    if (host)
+        InvalidateRect(host, nullptr, FALSE);
+    if (IsWindow(timeEdit)) {
+        HWND dialog = GetParent(timeEdit);
+        themeWindow(dialog);
+        SetWindowTheme(timeEdit, darkTheme ? L"DarkMode_CFD" : L"Explorer", nullptr);
+        for (int id : {IDOK, IDCANCEL})
+            SetWindowTheme(GetDlgItem(dialog, id), darkTheme ? L"DarkMode_Explorer" : L"Explorer", nullptr);
+        RedrawWindow(dialog, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+    }
+}
 void paintBackground(HDC dc, int W, int H) {
     if (!background.bitmap || background.w != W || background.h != H) {
         releaseBackground();
@@ -2355,14 +2419,19 @@ void paintBackground(HDC dc, int W, int H) {
         background.bitmap = CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
         if (!background.bitmap) {
             RECT all{0, 0, W, H};
-            HBRUSH b = CreateSolidBrush(cWindow);
+            HBRUSH b = CreateSolidBrush(colors.window);
             FillRect(dc, &all, b);
             DeleteObject(b);
             return;
         }
         background.w = W;
         background.h = H;
-        const float c0[3] = {29, 26, 40}, c1[3] = {13, 12, 18};
+        const float c0[3] = {static_cast<float>(GetRValue(colors.glow)),
+                             static_cast<float>(GetGValue(colors.glow)),
+                             static_cast<float>(GetBValue(colors.glow))};
+        const float c1[3] = {static_cast<float>(GetRValue(colors.window)),
+                             static_cast<float>(GetGValue(colors.window)),
+                             static_cast<float>(GetBValue(colors.window))};
         float cx = static_cast<float>(W) * 0.5f, cy = static_cast<float>(H) * 0.32f;
         float radius = std::max(1.0f, static_cast<float>(std::max(W, H)) * 0.7f);
         auto pixels = static_cast<uint32_t *>(bits);
@@ -2424,15 +2493,15 @@ void paintHost(HWND w) {
             // Audio only
             float d = std::min(fx(170), H * 0.4f), cx = W / 2, cy = H / 2 - fx(50);
             LinearGradientBrush disc(PointF(cx - d / 2, cy - d / 2), PointF(cx + d / 2, cy + d / 2),
-                                     argb(255, cViolet), argb(255, cPink));
+                                     argb(255, colors.violet), argb(255, colors.pink));
             g.FillEllipse(&disc, cx - d / 2, cy - d / 2, d, d);
             drawGlyph(g, G::Music, fonts.iconBig.get(), RectF(cx - d / 2, cy - d / 2, d, d),
                       argb(255, RGB(255, 255, 255)));
             drawText(g, playback.title, fonts.hero.get(),
-                     RectF(fx(24), cy + d / 2 + fx(20), W - fx(48), fx(40)), argb(255, cText),
+                     RectF(fx(24), cy + d / 2 + fx(20), W - fx(48), fx(40)), argb(255, colors.text),
                      StringAlignmentCenter);
             drawText(g, L"Solo audio", fonts.text.get(),
-                     RectF(fx(24), cy + d / 2 + fx(62), W - fx(48), fx(24)), argb(255, cMuted),
+                     RectF(fx(24), cy + d / 2 + fx(62), W - fx(48), fx(24)), argb(255, colors.muted),
                      StringAlignmentCenter);
         } else {
             int iconSize = px(112);
@@ -2452,7 +2521,7 @@ void paintHost(HWND w) {
                 g.ReleaseHDC(idc);
             }
             float y = top + fx(112 + 14);
-            drawText(g, L"MpvLight", fonts.hero.get(), RectF(0, y, W, fx(40)), argb(255, cText),
+            drawText(g, L"MpvLight", fonts.hero.get(), RectF(0, y, W, fx(40)), argb(255, colors.text),
                      StringAlignmentCenter);
             y += fx(42);
             std::wstring sub = playback.loading ? L"Apertura in corso…"
@@ -2465,13 +2534,13 @@ void paintHost(HWND w) {
                 StringFormat wrap;
                 wrap.SetAlignment(StringAlignmentCenter);
                 wrap.SetLineAlignment(StringAlignmentNear);
-                SolidBrush red(argb(255, cError));
+                SolidBrush red(argb(255, colors.error));
                 float ew = std::min(fx(640), W - fx(32));
                 g.DrawString(sub.c_str(), static_cast<INT>(sub.size()), fonts.text.get(),
                              RectF(W / 2 - ew / 2, y, ew, fx(64)), &wrap, &red);
                 y += fx(76);
             } else {
-                drawText(g, sub, fonts.text.get(), RectF(fx(16), y, W - fx(32), fx(24)), argb(255, cMuted),
+                drawText(g, sub, fonts.text.get(), RectF(fx(16), y, W - fx(32), fx(24)), argb(255, colors.muted),
                          StringAlignmentCenter);
                 y += fx(40);
             }
@@ -2492,26 +2561,26 @@ void paintHost(HWND w) {
             }
             y += bh + fx(14);
             drawText(g, L"Ctrl+O apri · Spazio pausa · F schermo intero · F1 aiuto", fonts.caption.get(),
-                     RectF(fx(16), y, W - fx(32), fx(20)), argb(255, cFaint), StringAlignmentCenter);
+                     RectF(fx(16), y, W - fx(32), fx(20)), argb(255, colors.faint), StringAlignmentCenter);
             y += fx(20);
             if (rows) {
                 float lw = std::min(fx(540), W - fx(48)), lx = cx - lw / 2;
                 y += fx(30);
                 drawText(g, L"RECENTI", fonts.smallSemi.get(), RectF(lx + fx(12), y, lw, fx(18)),
-                         argb(255, cFaint));
+                         argb(255, colors.faint));
                 y += fx(26);
                 for (size_t i = 0; i < rows; ++i) {
                     RectF r(lx, y, lw, fx(46));
                     welcomeRows.push_back(r);
                     if (welcomeHover == static_cast<int>(i))
-                        fillRound(g, r, fx(8), argb(16, RGB(255, 255, 255)));
+                        fillRound(g, r, fx(8), argb(40, colors.text));
                     bool audio = isAudioExt(extension(recent[i]));
                     drawGlyph(g, audio ? G::Music : G::Video, fonts.icon.get(),
-                              RectF(r.X + fx(6), r.Y, fx(34), r.Height), argb(255, RGB(167, 139, 250)));
+                              RectF(r.X + fx(6), r.Y, fx(34), r.Height), argb(255, colors.lilac));
                     drawText(g, fileName(recent[i]), fonts.text.get(),
-                             RectF(r.X + fx(46), r.Y + fx(4), r.Width - fx(58), fx(22)), argb(255, cText));
+                             RectF(r.X + fx(46), r.Y + fx(4), r.Width - fx(58), fx(22)), argb(255, colors.text));
                     drawText(g, folderOf(recent[i]), fonts.caption.get(),
-                             RectF(r.X + fx(46), r.Y + fx(24), r.Width - fx(58), fx(18)), argb(255, cFaint));
+                             RectF(r.X + fx(46), r.Y + fx(24), r.Width - fx(58), fx(18)), argb(255, colors.faint));
                     y += fx(48);
                 }
             }
@@ -2758,12 +2827,7 @@ LRESULT CALLBACK mainProc(HWND w, UINT msg, WPARAM a, LPARAM b) {
         dpi = static_cast<int>(GetDpiForWindow(w));
         makeFonts();
         applyWindowIcons(w);
-        BOOL dark = TRUE;
-        DwmSetWindowAttribute(w, 20, &dark, sizeof(dark));
-        COLORREF caption = RGB(18, 17, 24), captionText = cText, border = RGB(44, 40, 58);
-        DwmSetWindowAttribute(w, DWMWA_CAPTION_COLOR, &caption, sizeof(caption));
-        DwmSetWindowAttribute(w, DWMWA_TEXT_COLOR, &captionText, sizeof(captionText));
-        DwmSetWindowAttribute(w, DWMWA_BORDER_COLOR, &border, sizeof(border));
+        themeWindow(w);
         host = CreateWindowExW(0, L"MpvLightVideo", L"", WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0, 1, 1,
                                w, nullptr, appInstance, nullptr);
         barWnd = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, L"MpvLightLayer", L"",
@@ -2776,6 +2840,10 @@ LRESULT CALLBACK mainProc(HWND w, UINT msg, WPARAM a, LPARAM b) {
         SetTimer(w, 1, 16, nullptr);
         return 0;
     }
+    case WM_SETTINGCHANGE:
+        if (themeMode == ThemeMode::System && darkTheme != systemUsesDarkTheme())
+            applyTheme();
+        break;
     case WM_SIZE:
         if (a != SIZE_MINIMIZED)
             layout();
@@ -2835,9 +2903,19 @@ LRESULT CALLBACK mainProc(HWND w, UINT msg, WPARAM a, LPARAM b) {
     case WM_APPCOMMAND:
         switch (GET_APPCOMMAND_LPARAM(b)) {
         case APPCOMMAND_MEDIA_PLAY_PAUSE:
-        case APPCOMMAND_MEDIA_PLAY:
-        case APPCOMMAND_MEDIA_PAUSE:
             togglePlay();
+            return TRUE;
+        case APPCOMMAND_MEDIA_PLAY:
+            if (!playback.loaded)
+                togglePlay();
+            else if (playback.eof)
+                engine.seek(0, 0);
+            else
+                engine.property("pause", "no");
+            return TRUE;
+        case APPCOMMAND_MEDIA_PAUSE:
+            if (playback.loaded)
+                engine.property("pause", "yes");
             return TRUE;
         case APPCOMMAND_MEDIA_STOP:
             engine.command("stop");
@@ -3009,9 +3087,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int show) {
         if (!semi.IsAvailable())
             semiFamily = L"Segoe UI";
     }
-    darkMenus();
-    panelBrush = CreateSolidBrush(cPanel);
-    controlBrush = CreateSolidBrush(cPanel2);
 
     // Settings location: next to the exe when portable.flag exists, otherwise %LOCALAPPDATA%.
     wchar_t path[32768];
@@ -3040,6 +3115,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int show) {
     shots = readIni(L"Screenshot", L"Directory", defaultShots.c_str());
     shotFormat = readIni(L"Screenshot", L"Format", L"png") == L"jpg" ? L"jpg" : L"png";
     loadSettings();
+    applyTheme();
 
     INITCOMMONCONTROLSEX cc{sizeof(cc), ICC_STANDARD_CLASSES};
     InitCommonControlsEx(&cc);

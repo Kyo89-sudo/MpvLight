@@ -2,6 +2,16 @@
 
 Versioni nel formato `x.y.z`: `z` per le sole correzioni, `y` per nuove funzioni. Le risorse Windows che vogliono quattro numeri (manifest e blocco numerico VERSIONINFO) usano `x.y.z.0`.
 
+## 0.6.0 — 2026-11-02
+
+- Tema chiaro, scuro o collegato alle preferenze di Windows da **Menu → Tema**. La scelta viene salvata subito e ripristinata all'avvio; il tema scuro resta il valore iniziale.
+- Palette centralizzata in `ui_theme.hpp`, applicata a schermata iniziale/audio, barra video, notifiche, menu, barra del titolo, Aiuto, Informazioni, Vai al tempo e aggiornamento del motore. Il video e le catture non subiscono trasformazioni di colore.
+- Contrasto del testo verificato automaticamente in entrambi i temi; cache dello sfondo invalidata al cambio di tema.
+- Corretto il comportamento dei comandi multimediali separati Play e Pausa: ora sono idempotenti, mentre Play/Pausa resta un interruttore.
+- Accorpamento dei comandi spostato in `engine_queue.hpp`: solo aggiornamenti adiacenti possono essere sostituiti, rispettando apertura file, stop, pausa e screenshot.
+- Corretta l'icona di chiusura della finestra Aiuto, che usava il font del testo invece di quello delle icone.
+- Test rapidi aggiunti per ordine della coda, preferenze del tema e contrasto dei colori; resta attiva la suite di integrazione multitraccia.
+
 ## 0.5.2 — 2026-10-28
 
 - Lettura anticipata locale fino a 20 secondi, con limite di 64 MiB di pacchetti compressi in RAM, per ridurre le attese dopo una pausa su HDD USB che va in standby. Il tempo effettivamente disponibile dipende dal bitrate e dal formato; non impedisce lo standby e non elimina ogni possibile attesa del disco.

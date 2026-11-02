@@ -1,4 +1,4 @@
-// MpvLight Setup 0.5.2 — installer and uninstaller for the current user (no administrator rights).
+// MpvLight Setup 0.6.0 — installer and uninstaller for the current user (no administrator rights).
 //
 // Installs MpvLight.exe (embedded as a resource), downloads the libmpv engine from GitHub through
 // components.hpp, creates shortcuts, "Open with" associations and the entry in Settings > Apps.
@@ -49,7 +49,7 @@ using std::min;
 #pragma comment(lib, "gdiplus.lib")
 using namespace Gdiplus;
 
-static const wchar_t *kVersion = L"0.5.2";
+static const wchar_t *kVersion = L"0.6.0";
 static const wchar_t *kUninstallKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\MpvLight";
 static const wchar_t *kInnoKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\MpvLight_is1";
 static const wchar_t *kProgId = L"MpvLight.Video";

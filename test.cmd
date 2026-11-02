@@ -23,6 +23,10 @@ if errorlevel 1 (
 )
 
 if not exist build mkdir build
+cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /utf-8 tests\unit.cpp /Fe:build\unit.exe /Fo:build\unit.obj
+if errorlevel 1 exit /b 1
+build\unit.exe
+if errorlevel 1 exit /b 1
 set "DLL=%~dp0portable\libmpv-2.dll"
 if not exist "%DLL%" set "DLL=%LOCALAPPDATA%\Programs\MpvLight\libmpv-2.dll"
 cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /utf-8 tests\integration.cpp /Fe:build\integration.exe /Fo:build\integration.obj /link user32.lib

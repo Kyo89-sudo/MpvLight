@@ -1,5 +1,6 @@
 #pragma once
 #include "player.hpp"
+#include "engine_queue.hpp"
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -22,12 +23,7 @@ struct PlaybackState {
 // This is the only thread that calls libmpv. No decoder/property wait runs on
 // the UI thread.
 class Engine {
-    struct Job {
-        enum Kind { Command, Property, Seek, Screenshot } kind;
-        std::string a, b, c;
-        uint64_t reply{1};
-        int pauseAfter{-1};
-    };
+    using Job = EngineJob;
     std::thread thread_;
     std::mutex mutex_;
     std::condition_variable cv_;
@@ -39,23 +35,7 @@ class Engine {
         std::lock_guard<std::mutex> lock(mutex_);
         if (stopping_)
             return;
-        // Dragging a timeline must never create an old-seek backlog.
-        if (job.kind == Job::Seek)
-            for (auto it = jobs_.begin(); it != jobs_.end();) {
-                if (it->kind == Job::Seek)
-                    it = jobs_.erase(it);
-                else
-                    ++it;
-            }
-        if (job.kind == Job::Property && (job.a == "volume" || job.a == "speed")) {
-            for (auto it = jobs_.begin(); it != jobs_.end();) {
-                if (it->kind == Job::Property && it->a == job.a)
-                    it = jobs_.erase(it);
-                else
-                    ++it;
-            }
-        }
-        jobs_.push_back(std::move(job));
+        pushEngineJob(jobs_, std::move(job));
         cv_.notify_one();
     }
 
