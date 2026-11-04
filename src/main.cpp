@@ -1,4 +1,4 @@
-// MpvLight 0.6.0 — interfaccia Win32 in stile mpv: il video riempie la finestra e i controlli
+// MpvLight 0.6.1 — interfaccia Win32 in stile mpv: il video riempie la finestra e i controlli
 // compaiono sopra il video in finestre "layered" semitrasparenti che si nascondono da sole.
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -51,7 +51,7 @@ using std::min;
 #pragma comment(lib, "gdiplus.lib")
 using namespace Gdiplus;
 
-static const wchar_t *kVersion = L"0.6.0";
+static const wchar_t *kVersion = L"0.6.1";
 
 // ---------------------------------------------------------------------------------------------
 // Palette

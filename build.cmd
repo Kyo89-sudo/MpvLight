@@ -1,7 +1,7 @@
 @echo off
 rem MpvLight build: decoder 7z (LZMA SDK) -> portable\MpvLight.exe -> dist\ (setup, ZIP portatile, SHA256SUMS.txt)
 setlocal EnableExtensions
-set "VERSION=0.6.0"
+set "VERSION=0.6.1"
 cd /d "%~dp0"
 
 rem --- Visual Studio: use the developer environment if already active, otherwise find it with vswhere.

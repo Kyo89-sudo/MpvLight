@@ -2,6 +2,13 @@
 
 Versioni nel formato `x.y.z`: `z` per le sole correzioni, `y` per nuove funzioni. Le risorse Windows che vogliono quattro numeri (manifest e blocco numerico VERSIONINFO) usano `x.y.z.0`.
 
+## 0.6.1 — 2026-11-04
+
+- La finestra continua a elaborare i messaggi mentre libmpv rilascia l'uscita video in chiusura.
+- Gli aggiornamenti del motore proteggono i file temporanei da operazioni concorrenti, rispettano l'annullamento prima della sostituzione e preservano la copia precedente se il ripristino fallisce.
+- La finestra di aggiornamento resta aperta fino all'esito dell'annullamento; un errore nell'apertura di una finestra secondaria non disabilita il lettore.
+- Corretta la lettura ripetuta delle risposte GitHub e rimosso codice libmpv inutilizzato.
+
 ## 0.6.0 — 2026-11-02
 
 - Tema chiaro, scuro o collegato alle preferenze di Windows da **Menu → Tema**. La scelta viene salvata subito e ripristinata all'avvio; il tema scuro resta il valore iniziale.

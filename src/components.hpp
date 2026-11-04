@@ -424,11 +424,11 @@ inline bool httpGet(const std::wstring &url, std::vector<uint8_t> &out, const st
     std::wstring object = path;
     if (parts.lpszExtraInfo && parts.dwExtraInfoLength)
         object.append(parts.lpszExtraInfo, parts.dwExtraInfoLength);
-    Handle session(WinHttpOpen(L"MpvLight/0.6.0 (+https://github.com/Kyo89-sudo/MpvLight)",
+    Handle session(WinHttpOpen(L"MpvLight/0.6.1 (+https://github.com/Kyo89-sudo/MpvLight)",
                                WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME,
                                WINHTTP_NO_PROXY_BYPASS, 0));
     if (!session) // Windows before 8.1 has no automatic proxy type
-        session.h = WinHttpOpen(L"MpvLight/0.6.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME,
+        session.h = WinHttpOpen(L"MpvLight/0.6.1", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME,
                                 WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session) {
         error = systemError(GetLastError());
