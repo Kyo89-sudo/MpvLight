@@ -43,7 +43,6 @@ struct Player {
     decltype(&mpv_command) command{};
     decltype(&mpv_command_async) commandAsync{};
     decltype(&mpv_get_property) get{};
-    decltype(&mpv_set_property) set{};
     decltype(&mpv_set_property_string) setString{};
     decltype(&mpv_get_property_string) getString{};
     decltype(&mpv_free) free_{};
@@ -71,7 +70,7 @@ struct Player {
         if (!(bind(create, "mpv_create") && bind(initialize, "mpv_initialize") &&
               bind(option, "mpv_set_option_string") && bind(command, "mpv_command") &&
               bind(commandAsync, "mpv_command_async") && bind(get, "mpv_get_property") &&
-              bind(set, "mpv_set_property") && bind(setString, "mpv_set_property_string") &&
+              bind(setString, "mpv_set_property_string") &&
               bind(getString, "mpv_get_property_string") && bind(free_, "mpv_free") &&
               bind(freeNode, "mpv_free_node_contents") && bind(destroy, "mpv_terminate_destroy") &&
               bind(wait, "mpv_wait_event") && bind(observe, "mpv_observe_property") &&
@@ -80,6 +79,8 @@ struct Player {
             return false;
         }
         h = create();
+        if (!h)
+            failure = L"Impossibile creare il motore libmpv.";
         return h != nullptr;
     }
     void close() {
@@ -123,10 +124,6 @@ struct Player {
     }
     int property(const char *key, const std::string &value) {
         return h ? setString(h, key, value.c_str()) : MPV_ERROR_UNINITIALIZED;
-    }
-    int seek(double seconds) {
-        auto value = std::to_string(seconds);
-        return cmd("seek", value.c_str(), "absolute+exact");
     }
     std::vector<Track> tracks() const {
         std::vector<Track> result;

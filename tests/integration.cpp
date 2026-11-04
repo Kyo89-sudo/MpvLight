@@ -26,6 +26,57 @@ PlaybackState awaitState(Engine &engine, F predicate, const char *message, int t
 int wmain(int argc, wchar_t **argv) {
     try {
         require(argc == 3, "Usage: integration.exe DLL fixture.mkv");
+        {
+            comp::Release release;
+            std::string error;
+            const std::string json = R"({"tag_name":"v1","assets":[{"name":"engine.7z","browser_download_url":"https://example.invalid/engine.7z","size":-1}]})";
+            require(comp::parseRelease(json, release, error), "parse release");
+            require(comp::parseRelease(json, release, error) && release.assets.size() == 1 &&
+                        release.assets.front().size == 0,
+                    "release parsing appended stale assets or accepted a negative size");
+            require(!comp::parseRelease(R"({"assets":null})", release, error), "invalid asset list accepted");
+            std::cout << "PASS release parsing replaces stale assets and rejects malformed data\n";
+        }
+        {
+            auto dir = std::filesystem::temp_directory_path() /
+                       (L"MpvLight-test-" + std::to_wstring(GetCurrentProcessId()));
+            require(std::filesystem::create_directory(dir), "create isolated replacement test folder");
+            auto target = (dir / L"libmpv-2.dll").wstring();
+            auto staged = target + L".new";
+            auto backup = target + L".old";
+            struct Cleanup {
+                std::wstring target, staged, backup, dir;
+                ~Cleanup() {
+                    for (const auto &path : {target, staged, backup})
+                        DeleteFileW(path.c_str());
+                    RemoveDirectoryW(dir.c_str());
+                }
+            } cleanup{target, staged, backup, dir.wstring()};
+            std::wstring error;
+            bool inUse{};
+            std::vector<uint8_t> before{1}, after{2}, read;
+            if (!comp::replaceFile(target, before, inUse, error)) {
+                std::wcerr << error << L'\n';
+                throw std::runtime_error("initial replacement");
+            }
+            require(comp::writeFile(staged, after.data(), after.size(), error), "stage replacement");
+            {
+                comp::ReplacementLock lock(target);
+                require(static_cast<bool>(lock), "acquire replacement lock");
+                require(!comp::replaceFile(target, after, inUse, error), "concurrent replacement succeeded");
+                comp::removeStale(dir.wstring());
+                require(comp::readFile(staged, read, error) && read == after, "cleanup removed live stage");
+            }
+            std::atomic<bool> cancel{true};
+            require(!comp::replaceFile(target, after, inUse, error, &cancel), "cancelled replacement succeeded");
+            require(comp::readFile(target, read, error) && read == before, "original replaced on cancel");
+            require(MoveFileExW(target.c_str(), backup.c_str(), 0), "simulate interrupted rollback");
+            comp::removeStale(dir.wstring());
+            require(comp::readFile(backup, read, error) && read == before, "cleanup removed only rollback copy");
+            require(comp::replaceFile(target, after, inUse, error), "replacement after lock released");
+            require(comp::readFile(target, read, error) && read == after, "replacement not written");
+            std::cout << "PASS replacement lock, cancellation and rollback preservation\n";
+        }
         comp::Release release;
         release.assets.push_back({"mpv-dev-x86_64-v3-test.7z", "https://example.invalid/v3", "", 1});
         require(!comp::pickEngine(release, false), "AVX2 build accepted on a baseline CPU");
@@ -175,6 +226,11 @@ int wmain(int argc, wchar_t **argv) {
             "invalid file handling");
         engine.command("loadfile", path);
         awaitState(engine, [](auto &s) { return s.loaded; }, "recover after failed load");
+        engine.requestStop();
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!engine.stopped() && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        require(engine.stopped(), "worker did not signal shutdown completion");
         engine.stop();
         std::cout << "PASS error recovery and clean worker shutdown\n";
         return 0;

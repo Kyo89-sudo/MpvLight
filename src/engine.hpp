@@ -5,7 +5,6 @@
 #include <chrono>
 #include <condition_variable>
 #include <deque>
-#include <functional>
 #include <mutex>
 #include <thread>
 #include <filesystem>
@@ -28,6 +27,7 @@ class Engine {
     std::mutex mutex_;
     std::condition_variable cv_;
     std::atomic<bool> wakeup_{};
+    std::atomic<bool> stopped_{true};
     std::deque<Job> jobs_;
     bool stopping_{};
     PlaybackState shared_;
@@ -43,12 +43,19 @@ class Engine {
     ~Engine() {
         stop();
     }
-    void stop() {
+    void requestStop() {
         {
             std::lock_guard<std::mutex> lock(mutex_);
             stopping_ = true;
-            cv_.notify_one();
+            jobs_.clear();
         }
+        cv_.notify_one();
+    }
+    bool stopped() const {
+        return stopped_.load();
+    }
+    void stop() {
+        requestStop();
         if (thread_.joinable())
             thread_.join();
     }
@@ -73,7 +80,14 @@ class Engine {
     }
     void start(const std::wstring &dll, HWND video, const std::wstring &shots, const std::string &format,
                bool headless = false) {
+        struct SignalStopped {
+            std::atomic<bool> &flag;
+            ~SignalStopped() { flag.store(true); }
+        };
+        stopped_.store(false);
         thread_ = std::thread([this, dll, video, shots, format, headless] {
+            // Signal completion only after Player destroys the embedded video output.
+            SignalStopped signal{stopped_};
             Player p;
             PlaybackState state;
             auto publish = [&] {

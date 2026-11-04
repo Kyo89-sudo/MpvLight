@@ -1,5 +1,11 @@
 # Verifiche
 
+## Manutenzione successiva alla 0.6.0
+
+- La suite verifica la segnalazione di fine del motore dopo la richiesta di chiusura. La finestra principale continua a elaborare i messaggi durante l'arresto di libmpv.
+- Le prove sui file verificano che un aggiornamento concorrente venga rifiutato, che la pulizia lasci intatti i file in uso e la copia di riserva in assenza del file principale, e che l'annullamento conservi l'originale.
+- Il parser della risposta GitHub sostituisce i dati della lettura precedente e rifiuta una lista di asset non valida.
+
 ## 0.6.0 — temi e regressioni
 
 - MSVC x64 `/W4`: compilazione di app e setup senza avvisi.

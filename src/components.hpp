@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
@@ -270,23 +271,29 @@ inline bool parseRelease(const std::string &body, Release &rel, std::string &err
         error = "risposta di GitHub non valida";
         return false;
     }
-    if (!root.get("assets")) {
+    const auto *assets = root.get("assets");
+    if (!assets || assets->type != Json::Array) {
         auto msg = root.str("message");
         error = msg.empty() ? "nessuna release trovata" : "GitHub: " + msg;
         return false;
     }
-    rel.tag = root.str("tag_name");
-    for (auto &a : root.get("assets")->items) {
+    Release parsed;
+    parsed.tag = root.str("tag_name");
+    for (const auto &a : assets->items) {
         Asset asset;
         asset.name = a.str("name");
         asset.url = a.str("browser_download_url");
-        asset.size = static_cast<uint64_t>(a.num("size"));
+        double size = a.num("size");
+        if (size >= 0 && size < 18446744073709551616.0 && std::floor(size) == size)
+            asset.size = static_cast<uint64_t>(size);
         auto digest = a.str("digest");
         if (digest.rfind("sha256:", 0) == 0)
             asset.sha256 = digest.substr(7);
         if (!asset.name.empty() && asset.url.rfind("https://", 0) == 0)
-            rel.assets.push_back(std::move(asset));
+            parsed.assets.push_back(std::move(asset));
     }
+    rel = std::move(parsed);
+    error.clear();
     return true;
 }
 
@@ -306,7 +313,7 @@ inline const Asset *pickEngine(const Release &rel, bool preferV3) {
     if (preferV3 && v3)
         return v3;
     // Never fall back to an AVX2-only DLL on a CPU that cannot execute it.
-    return standard ? standard : (preferV3 ? v3 : nullptr);
+    return standard;
 }
 
 // A real 64-bit Windows DLL: "MZ", a PE header and the x64 machine type.
@@ -579,18 +586,48 @@ inline bool writeFile(const std::wstring &path, const uint8_t *data, size_t size
 inline std::wstring staleName(const std::wstring &target, int i) {
     return target + L".old" + (i ? std::to_wstring(i) : std::wstring());
 }
+// The installer and player can work in the same folder. Protect both the
+// staged file and the rollback copy from a concurrent replacement or cleanup.
+class ReplacementLock {
+    HANDLE handle_;
+  public:
+    explicit ReplacementLock(const std::wstring &target)
+        : handle_(CreateFileW((target + L".lock").c_str(), GENERIC_WRITE | DELETE, 0, nullptr,
+                              OPEN_ALWAYS, FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, nullptr)) {}
+    ReplacementLock(const ReplacementLock &) = delete;
+    ReplacementLock &operator=(const ReplacementLock &) = delete;
+    ~ReplacementLock() {
+        if (*this)
+            CloseHandle(handle_);
+    }
+    explicit operator bool() const { return handle_ != INVALID_HANDLE_VALUE; }
+};
 inline bool replaceFile(const std::wstring &target, const std::vector<uint8_t> &data, bool &replacedInUse,
-                        std::wstring &error) {
+                        std::wstring &error, const std::atomic<bool> *cancel = nullptr) {
     replacedInUse = false;
+    ReplacementLock lock(target);
+    if (!lock) {
+        error = systemError(GetLastError());
+        return false;
+    }
+    if (cancel && cancel->load()) {
+        error = L"operazione annullata";
+        return false;
+    }
     std::wstring fresh = target + L".new";
     if (!writeFile(fresh, data.data(), data.size(), error))
         return false;
+    if (cancel && cancel->load()) {
+        DeleteFileW(fresh.c_str());
+        error = L"operazione annullata";
+        return false;
+    }
     if (MoveFileExW(fresh.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
         return true;
     DWORD firstError = GetLastError();
     // The target is probably loaded (a DLL in use) or running: move it aside under a free ".old" name
     // (an older ".old" may itself still be loaded by another instance), then put the new file in place.
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 10 && GetFileAttributesW(target.c_str()) != INVALID_FILE_ATTRIBUTES; ++i) {
         std::wstring old = staleName(target, i);
         DeleteFileW(old.c_str());
         if (!MoveFileExW(target.c_str(), old.c_str(), MOVEFILE_REPLACE_EXISTING))
@@ -600,7 +637,11 @@ inline bool replaceFile(const std::wstring &target, const std::vector<uint8_t> &
             return true;
         }
         firstError = GetLastError();
-        MoveFileExW(old.c_str(), target.c_str(), 0); // put the original back: never leave no file at all
+        if (!MoveFileExW(old.c_str(), target.c_str(), 0)) {
+            error = systemError(firstError) + L"\nCopia precedente conservata in: " + old;
+            DeleteFileW(fresh.c_str());
+            return false;
+        }
         break;
     }
     error = systemError(firstError);
@@ -611,6 +652,9 @@ inline bool replaceFile(const std::wstring &target, const std::vector<uint8_t> &
 inline void removeStale(const std::wstring &dir) {
     for (const wchar_t *name : {kEngineDll, L"MpvLight.exe"}) {
         std::wstring target = dir + L"\\" + name;
+        ReplacementLock lock(target);
+        if (!lock || GetFileAttributesW(target.c_str()) == INVALID_FILE_ATTRIBUTES)
+            continue; // a missing target may still need its rollback copy
         DeleteFileW((target + L".new").c_str());
         for (int i = 0; i < 10; ++i)
             DeleteFileW(staleName(target, i).c_str());
@@ -742,7 +786,7 @@ inline EngineResult installEngine(const std::wstring &dir, const std::wstring &l
     }
     notify(Stage::Install, -1, L"Installazione del motore…");
     SHCreateDirectoryExW(nullptr, dir.c_str(), nullptr);
-    if (!replaceFile(dir + L"\\" + kEngineDll, dll, res.restartNeeded, res.error))
+    if (!replaceFile(dir + L"\\" + kEngineDll, dll, res.restartNeeded, res.error, &cancel))
         return res;
     res.build = sourceName;
     regWrite(L"EngineBuild", sourceName);

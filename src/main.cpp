@@ -145,6 +145,7 @@ float barAlpha = 0;
 ULONGLONG lastMove = 0, lastTick = 0;
 POINT lastCursor{-1, -1};
 bool menuOpen = false, cursorHidden = false, showRemaining = false;
+bool closing = false;
 bool barDirty = true, osdDirty = true, hostDirty = true;
 double pendingSeek = -1, previewTime = 0;
 ULONGLONG pendingUntil = 0, lastScrubSeek = 0;
@@ -1700,6 +1701,12 @@ void showHelp(int tab) {
     helpWnd = CreateWindowExW(WS_EX_DLGMODALFRAME, L"MpvLightHelp", L"Aiuto — MpvLight", style,
                               (owner.left + owner.right - w) / 2, (owner.top + owner.bottom - h) / 2, w, h,
                               mainWindow, nullptr, appInstance, nullptr);
+    if (!helpWnd) {
+        if (helpIcon)
+            DestroyIcon(helpIcon);
+        helpIcon = nullptr;
+        return;
+    }
     themeWindow(helpWnd);
     EnableWindow(mainWindow, FALSE);
     ShowWindow(helpWnd, SW_SHOW);
@@ -1724,7 +1731,7 @@ UpPhase upPhase = UpPhase::Checking;
 std::shared_ptr<UpdateJob> upJob;
 comp::Asset upAsset;
 bool upHasAsset = false;
-std::wstring upMessage, upResultBuild;
+std::wstring upMessage;
 bool upFailed = false;
 comp::Report upReport;
 int upHover = -1; // 0 primary, 1 secondary, 2 link
@@ -1816,7 +1823,6 @@ void upPoll() {
         if (job->finished) {
             upPhase = UpPhase::Finished;
             upFailed = !job->result.ok;
-            upResultBuild = job->result.build;
             upMessage = job->result.ok ? L"Motore installato: " + job->result.build
                                        : L"Aggiornamento non riuscito: " + job->result.error;
         }
@@ -2010,6 +2016,9 @@ LRESULT CALLBACK updateProc(HWND w, UINT msg, WPARAM a, LPARAM b) {
     case WM_CLOSE:
         if (upJob)
             upJob->cancel = true;
+        // Keep the install job owned until it has finished or acknowledged cancellation.
+        if (upPhase == UpPhase::Working)
+            return 0;
         KillTimer(w, 1);
         EnableWindow(mainWindow, TRUE);
         DestroyWindow(w);
@@ -2028,7 +2037,7 @@ void showEngineUpdate() {
         return;
     }
     if (helpWnd)
-        PostMessageW(helpWnd, WM_CLOSE, 0, 0);
+        SendMessageW(helpWnd, WM_CLOSE, 0, 0);
     RECT r{0, 0, px(560), px(330)};
     DWORD style = WS_POPUP | WS_CAPTION | WS_SYSMENU;
     AdjustWindowRectExForDpi(&r, style, FALSE, WS_EX_DLGMODALFRAME, static_cast<UINT>(dpi));
@@ -2038,10 +2047,15 @@ void showEngineUpdate() {
     updateWnd = CreateWindowExW(WS_EX_DLGMODALFRAME, L"MpvLightUpdate", L"Aggiorna motore — MpvLight", style,
                                 (owner.left + owner.right - w) / 2, (owner.top + owner.bottom - h) / 2, w, h,
                                 mainWindow, nullptr, appInstance, nullptr);
+    if (!updateWnd)
+        return;
+    if (!SetTimer(updateWnd, 1, 50, nullptr)) {
+        DestroyWindow(updateWnd);
+        return;
+    }
     themeWindow(updateWnd);
     upHover = -1;
     upStartCheck();
-    SetTimer(updateWnd, 1, 50, nullptr);
     EnableWindow(mainWindow, FALSE);
     ShowWindow(updateWnd, SW_SHOW);
 }
@@ -2877,8 +2891,14 @@ LRESULT CALLBACK mainProc(HWND w, UINT msg, WPARAM a, LPARAM b) {
         return 0;
     }
     case WM_TIMER:
-        if (a == 1)
-            tick();
+        if (a == 1) {
+            if (!closing)
+                tick();
+            else if (engine.stopped()) {
+                KillTimer(w, 1);
+                DestroyWindow(w);
+            }
+        }
         return 0;
     case WM_APP + 1:
         info(playback.captureError);
@@ -2938,13 +2958,21 @@ LRESULT CALLBACK mainProc(HWND w, UINT msg, WPARAM a, LPARAM b) {
         return 0;
     }
     case WM_CLOSE:
-        KillTimer(w, 1);
+        if (closing)
+            return 0;
+        if (updateWnd && upPhase == UpPhase::Working) {
+            upActivate(1);
+            return 0;
+        }
+        closing = true;
         saveSettings();
+        EnableWindow(w, FALSE);
         ShowWindow(barWnd, SW_HIDE);
         ShowWindow(osdWnd, SW_HIDE);
         ShowWindow(w, SW_HIDE);
-        engine.stop();
-        DestroyWindow(w);
+        // libmpv may send messages to the video host during teardown. Keep
+        // dispatching them until the worker has released the output.
+        engine.requestStop();
         return 0;
     case WM_DESTROY:
         PostQuitMessage(0);
@@ -3193,10 +3221,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int show) {
 
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
-        if (!startupSent && engine.snapshot().ready) {
-            playback = engine.snapshot();
-            loadMany(startup);
-            startupSent = true;
+        if (!closing && !startupSent) {
+            auto state = engine.snapshot();
+            if (state.ready) {
+                playback = std::move(state);
+                loadMany(startup);
+                startupSent = true;
+            }
         }
         HWND modal = helpWnd ? helpWnd : updateWnd;
         if (modal && (msg.message == WM_KEYDOWN) && GetAncestor(msg.hwnd, GA_ROOT) == modal) {
